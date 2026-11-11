@@ -37,16 +37,25 @@ export const ChatUsageStrip = memo(function ChatUsageStrip() {
             <span className="truncate">
               {provider} {item.windowLabel}
             </span>
-            <span className="relative h-1 w-14 shrink-0 overflow-hidden rounded-full bg-muted">
-              <span
-                className="absolute inset-y-0 left-0 rounded-full"
-                style={{
-                  width: `${Math.min(100, Math.max(0, used))}%`,
-                  backgroundColor: item.overPace
-                    ? "var(--color-destructive)"
-                    : barColor(item.driver),
-                }}
-              />
+            <span className="relative flex h-2.5 w-14 shrink-0 items-center">
+              <span className="relative h-1 w-full overflow-hidden rounded-full bg-muted">
+                <span
+                  className="absolute inset-y-0 left-0 rounded-full"
+                  style={{
+                    width: `${Math.min(100, Math.max(0, used))}%`,
+                    backgroundColor: item.overPace
+                      ? "var(--color-destructive)"
+                      : barColor(item.driver),
+                  }}
+                />
+              </span>
+              {item.expectedUsedPercent === null ? null : (
+                <span
+                  aria-hidden
+                  className="absolute inset-y-0 w-0.5 -translate-x-1/2 rounded-full bg-foreground"
+                  style={{ left: `${Math.min(100, Math.max(0, item.expectedUsedPercent))}%` }}
+                />
+              )}
             </span>
             <span className="text-foreground">{used}%</span>
             {item.resetsIn ? <span>{item.resetsIn}</span> : null}
