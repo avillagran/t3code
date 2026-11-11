@@ -5,7 +5,6 @@ for (const stream of [process.stdout, process.stderr]) {
   stream.on("error", handleStdioError);
 }
 
-import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -15,6 +14,7 @@ import * as NodeOS from "node:os";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
@@ -251,7 +251,8 @@ const layerDesktopClerk = DesktopClerk.layer.pipe(
 
 const layerDesktopApplicationRuntime = layerDesktopApplication.pipe(
   Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
-  Layer.provideMerge(NodeHttpClient.layerUndici),
+  // Node's built-in fetch, so main does not also evaluate a bundled undici copy at startup.
+  Layer.provideMerge(FetchHttpClient.layer),
   Layer.provideMerge(NetService.layer),
   Layer.provideMerge(layerElectron),
 );

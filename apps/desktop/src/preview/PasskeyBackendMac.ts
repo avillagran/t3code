@@ -1,25 +1,28 @@
-import { getPublicSuffix } from "tldts";
-
 import type { PasskeyBackend, PasskeyCeremonyContext } from "./PasskeyBackend.ts";
 import { authenticatorDataFromAttestation } from "./PasskeyAttestation.ts";
 import type { PasskeyCeremonyResult } from "./PasskeyBridge.ts";
 
 const ES256 = -7;
 
-// WebAuthn rejects public suffix RP IDs, including private registries such as github.io.
-const isPublicSuffix = (domain: string) =>
-  domain !== "localhost" && getPublicSuffix(domain, { allowPrivateDomains: true }) === domain;
-
-// Loaded only once a ceremony runs: the module and its native addon ship on macOS alone.
-const nativeOptions = async (context: PasskeyCeremonyContext) => ({
-  webauthn: await import("electron-webauthn"),
-  options: {
-    currentOrigin: context.origin,
-    topFrameOrigin: context.origin,
-    nativeWindowHandle: context.nativeWindowHandle,
-    isPublicSuffix,
-  },
-});
+// Loaded only once a ceremony runs: the module and its native addon ship on macOS alone, and
+// the public suffix list is large.
+const nativeOptions = async (context: PasskeyCeremonyContext) => {
+  const [webauthn, { getPublicSuffix }] = await Promise.all([
+    import("electron-webauthn"),
+    import("tldts"),
+  ]);
+  return {
+    webauthn,
+    options: {
+      currentOrigin: context.origin,
+      topFrameOrigin: context.origin,
+      nativeWindowHandle: context.nativeWindowHandle,
+      // WebAuthn rejects public suffix RP IDs, including private registries such as github.io.
+      isPublicSuffix: (domain: string) =>
+        domain !== "localhost" && getPublicSuffix(domain, { allowPrivateDomains: true }) === domain,
+    },
+  };
+};
 
 const isBufferSource = (value: unknown): value is BufferSource =>
   value instanceof ArrayBuffer || ArrayBuffer.isView(value);
