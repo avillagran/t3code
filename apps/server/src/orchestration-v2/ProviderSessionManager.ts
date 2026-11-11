@@ -21,6 +21,7 @@ import {
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
+import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -66,7 +67,10 @@ import {
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 
-const DEFAULT_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+const IdleTimeoutConfig = Config.Int("T3CODE_PROVIDER_IDLE_TIMEOUT_MS").pipe(
+  Config.withDefault(DEFAULT_IDLE_TIMEOUT_MS),
+);
 const DEFAULT_MAX_IDLE_PIN_MS = 4 * 60 * 60 * 1000;
 const RELEASE_SCOPE_CLOSE_TIMEOUT_MS = 30 * 1000;
 /** Past adapters' own 10 s stop fallbacks, so they settle first when the provider answers at all. */
@@ -524,7 +528,18 @@ export const layerWithOptions = (
         readonly providerSessionId: ProviderSessionId;
         readonly threadId: ThreadId;
       }) => `${input.providerSessionId}\u0000${input.threadId}`;
-      const idleTimeoutMs = Math.max(1, options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS);
+      const idleTimeoutMs = Math.max(
+        1,
+        options.idleTimeoutMs ??
+          (yield* IdleTimeoutConfig.pipe(
+            Effect.tapError((error) =>
+              Effect.logWarning("orchestration-v2.driver-session.idle-timeout-config-invalid", {
+                error,
+              }),
+            ),
+            Effect.orElseSucceed(() => DEFAULT_IDLE_TIMEOUT_MS),
+          )),
+      );
       const maxIdlePinMs = Math.max(0, options.maxIdlePinMs ?? DEFAULT_MAX_IDLE_PIN_MS);
       interface PreparedMcpCredential {
         readonly mcpCredentialId: string | undefined;
