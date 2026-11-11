@@ -512,6 +512,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("hide fold running monitoring threads inbox sidebar shelf")],
   },
   {
+    id: "chat-usage-strip",
+    title: "Usage strip",
+    to: "/settings/general",
+    searchTerms: ["provider usage limits quota bars 5h weekly reset header chat"],
+  },
+  {
     id: "boring-sidebar",
     title: msg("Boring sidebar (group by project)"),
     to: "/settings/labs",
