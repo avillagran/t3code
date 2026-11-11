@@ -22,11 +22,7 @@ import {
 import { GaugeIcon, TrendingDownIcon, TrendingUpIcon } from "lucide-react";
 import { Fragment, useLayoutEffect, useState } from "react";
 
-import {
-  persistClientSettingsPatch,
-  useClientSettings,
-  usePrimarySettings,
-} from "../../hooks/useSettings";
+import { usePrimarySettings } from "../../hooks/useSettings";
 import { observeResize } from "../../lib/observeResize";
 import { environmentPresentations } from "../../state/presentation";
 import { useEnvironmentScope, readEnvironmentScope } from "../../state/session";
@@ -43,7 +39,6 @@ import {
   AlertDialogTitle,
 } from "../ui/alert-dialog";
 import { Button } from "../ui/button";
-import { Switch } from "../ui/switch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { UsageLimitsPooled } from "./UsageLimitsPooled";
 import { PROVIDER_PRESENTATION } from "./usageProviders";
@@ -395,26 +390,5 @@ export function UsageLimitsSection({
       ];
     }),
   );
-  return (
-    <>
-      <UsageStripToggle />
-      <UsageLimitsPooled presentations={selected} now={now} />
-    </>
-  );
-}
-
-function UsageStripToggle() {
-  const enabled = useClientSettings((s) => s.chatUsageStripEnabled);
-  return (
-    <label className="mb-4 flex items-center justify-end gap-2 text-xs text-muted-foreground">
-      Show usage above chat
-      <Switch
-        size="sm"
-        checked={enabled}
-        onCheckedChange={(checked) =>
-          void persistClientSettingsPatch({ chatUsageStripEnabled: Boolean(checked) })
-        }
-      />
-    </label>
-  );
+  return <UsageLimitsPooled presentations={selected} now={now} />;
 }
