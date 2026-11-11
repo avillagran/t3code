@@ -43,6 +43,29 @@ const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const encodeServerSettingsPatch = Schema.encodeSync(ServerSettingsPatch);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
+describe("provider session idle timeout", () => {
+  it("preserves the existing 30 minute default and accepts disabling or shortening it", () => {
+    expect(decodeServerSettings({}).providerSessionIdleTimeoutMinutes).toBe(30);
+    for (const value of [null, 1, 5, 30, 1440]) {
+      expect(decodeServerSettingsPatch({ providerSessionIdleTimeoutMinutes: value })).toEqual({
+        providerSessionIdleTimeoutMinutes: value,
+      });
+      expect(
+        decodeServerSettings({ providerSessionIdleTimeoutMinutes: value })
+          .providerSessionIdleTimeoutMinutes,
+      ).toBe(value);
+    }
+  });
+
+  it("rejects invalid timeouts rather than overflowing timers", () => {
+    for (const value of [0, -1, 1.5, 1441, Infinity, "5"]) {
+      expect(() =>
+        decodeServerSettingsPatch({ providerSessionIdleTimeoutMinutes: value }),
+      ).toThrow();
+    }
+  });
+});
+
 it("drops theme defaults from a client's settings patch", () => {
   expect(
     decodeClientServerSettingsPatch({
