@@ -64,6 +64,16 @@ export const makeChecksRevalidator = Effect.gen(function* () {
       })),
     { capacity: 128, timeToLive: () => "30 minutes" },
   );
+  // Entries hold response bodies and expire only when read; drop them once their pull request is no longer polled.
+  const scope = yield* Effect.scope;
+  let sweepPending = false;
+  const sweep: Effect.Effect<void> = Cache.keys(entries).pipe(
+    Effect.delay("1 minute"),
+    Effect.flatMap((keys) => {
+      sweepPending = Array.from(keys).length > 0;
+      return sweepPending ? sweep : Effect.void;
+    }),
+  );
   return (
     input: ProviderRepositoryRef & { readonly number: number },
     read: Effect.Effect<
@@ -78,6 +88,10 @@ export const makeChecksRevalidator = Effect.gen(function* () {
       if (credential === null) return yield* read;
       const key = `${credential.credentialFingerprint}\0${input.host}\0${input.repository}\0${input.number}`;
       const entry = yield* Cache.get(entries, key);
+      if (!sweepPending) {
+        sweepPending = true;
+        yield* Effect.forkIn(sweep, scope);
+      }
       return yield* entry.gate.withPermit(
         Effect.gen(function* () {
           if (!entry.supported) return yield* read;
