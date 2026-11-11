@@ -139,7 +139,7 @@ const COMMIT_DIFF_CACHE_TTL = Duration.minutes(10);
 const LIST_STATS_CACHE_TTL = Duration.seconds(60);
 const FILES_VIEWED_CACHE_TTL = Duration.seconds(15);
 const DIFF_STALE_WINDOW = Duration.minutes(10);
-const DIFF_SWEEP_INTERVAL = Duration.minutes(1);
+const CACHE_SWEEP_INTERVAL = Duration.minutes(1);
 const VIEWER_CACHE_TTL = Duration.minutes(10);
 const STALE_DETAIL_WINDOW = Duration.minutes(10);
 const isPullRequestProviderError = Schema.is(PullRequestProviderError);
@@ -3059,7 +3059,7 @@ export const make = Effect.gen(function* () {
         )) {
           held.delete(evicted);
         }
-        armDiffSweep();
+        armCacheSweep();
       });
     const serve = <E>(key: string, read: Effect.Effect<PullRequestDiffResult, E>) => {
       const recorded = read.pipe(Effect.tap((value) => record(key, value)));
@@ -3078,6 +3078,11 @@ export const make = Effect.gen(function* () {
     });
     return { serve, dropExpired };
   })();
+
+  const sweptLookup =
+    <A, E, R>(lookup: (key: string) => Effect.Effect<A, E, R>) =>
+    (key: string) =>
+      lookup(key).pipe(Effect.ensuring(Effect.sync(armCacheSweep)));
 
   const makeLastGoodRead = <A>(capacity: number) => {
     const held = new Map<string, { readonly at: number; readonly value: A }>();
@@ -3322,7 +3327,7 @@ export const make = Effect.gen(function* () {
         );
 
   const listCache = yield* Cache.makeWith(
-    (key: string) => {
+    sweptLookup((key: string) => {
       const [
         ,
         state,
@@ -3357,7 +3362,7 @@ export const make = Effect.gen(function* () {
         ...(query === null ? {} : { query }),
         ...(cursorEntries === null ? {} : { cursors: Object.fromEntries(cursorEntries) }),
       } as PullRequestListInput);
-    },
+    }),
     {
       capacity: LIST_CACHE_CAPACITY,
       timeToLive: (exit) => (Exit.isSuccess(exit) ? LIST_CACHE_TTL : Duration.zero),
@@ -3397,7 +3402,7 @@ export const make = Effect.gen(function* () {
   };
 
   const checksCache = yield* Cache.makeWith(
-    (key: string) => {
+    sweptLookup((key: string) => {
       const input = refOfCacheKey(key);
       return requireProject(input).pipe(
         Effect.flatMap((project) =>
@@ -3417,7 +3422,7 @@ export const make = Effect.gen(function* () {
                 ),
         ),
       );
-    },
+    }),
     {
       capacity: DETAIL_CACHE_CAPACITY,
       // Expire from the read's start so checks seeded from a slow detail read keep their age.
@@ -3438,7 +3443,7 @@ export const make = Effect.gen(function* () {
   );
 
   const watchFingerprintCache = yield* Cache.makeWith(
-    (key: string) => {
+    sweptLookup((key: string) => {
       const input = refOfCacheKey(key);
       return requireProject(input).pipe(
         Effect.flatMap((project) =>
@@ -3454,7 +3459,7 @@ export const make = Effect.gen(function* () {
                 .pipe(Effect.mapError(toPullRequestError("watchFingerprint"))),
         ),
       );
-    },
+    }),
     {
       capacity: DETAIL_CACHE_CAPACITY,
       timeToLive: (exit) => (Exit.isSuccess(exit) ? CHECKS_CACHE_TTL : Duration.zero),
@@ -3462,7 +3467,7 @@ export const make = Effect.gen(function* () {
   );
 
   const detailCache = yield* Cache.makeWith(
-    (key: string) => {
+    sweptLookup((key: string) => {
       const statsKey = statsCacheKey(key);
       const ref = refOfCacheKey(key);
       return detailUncached(ref).pipe(
@@ -3500,7 +3505,7 @@ export const make = Effect.gen(function* () {
           }),
         ),
       );
-    },
+    }),
     {
       capacity: DETAIL_CACHE_CAPACITY,
       timeToLive: (exit) =>
@@ -3626,9 +3631,9 @@ export const make = Effect.gen(function* () {
   };
 
   const activityCache = yield* Cache.makeWith(
-    (key: string) => {
+    sweptLookup((key: string) => {
       return activityUncached(refOfCacheKey(key));
-    },
+    }),
     {
       capacity: DETAIL_CACHE_CAPACITY,
       timeToLive: (exit, key) =>
@@ -3637,7 +3642,7 @@ export const make = Effect.gen(function* () {
   );
 
   const changeBreakdownCache = yield* Cache.makeWith(
-    (key: string) => {
+    sweptLookup((key: string) => {
       const ref = refOfCacheKey(key);
       return requireProject(ref).pipe(
         Effect.flatMap((project) => {
@@ -3654,7 +3659,7 @@ export const make = Effect.gen(function* () {
           );
         }),
       );
-    },
+    }),
     {
       capacity: DETAIL_CACHE_CAPACITY,
       timeToLive: (exit, key) =>
@@ -3663,9 +3668,9 @@ export const make = Effect.gen(function* () {
   );
 
   const previewCache = yield* Cache.makeWith(
-    (key: string) => {
+    sweptLookup((key: string) => {
       return previewUncached(refOfCacheKey(key));
-    },
+    }),
     {
       capacity: DETAIL_CACHE_CAPACITY,
       timeToLive: (exit) =>
@@ -3726,26 +3731,40 @@ export const make = Effect.gen(function* () {
       },
     },
   );
-  // Diffs expire only when their keys are reread; push-dependent keys leave closed pages' patches retained.
-  let diffSweepPending = false;
+  // Cache entries expire only when their keys are reread; epoch- and push-dependent keys never are.
+  let cacheSweepPending = false;
   // Fork in service context atomically with the flag to avoid stranded flags and retained caller requests.
-  const armDiffSweep = () => {
-    if (diffSweepPending) return;
-    diffSweepPending = true;
-    runFork(Effect.forkIn(sweepDiffs, scope));
+  const armCacheSweep = () => {
+    if (cacheSweepPending) return;
+    cacheSweepPending = true;
+    runFork(Effect.forkIn(sweepCaches, scope));
   };
-  const sweepDiffs: Effect.Effect<void> = Effect.sleep(DIFF_SWEEP_INTERVAL).pipe(
+  const sweptCacheKeys = () => [
+    Cache.keys(diffCache),
+    Cache.keys(listCache),
+    Cache.keys(checksCache),
+    Cache.keys(watchFingerprintCache),
+    Cache.keys(detailCache),
+    Cache.keys(activityCache),
+    Cache.keys(changeBreakdownCache),
+    Cache.keys(previewCache),
+    Cache.keys(filesViewedCache),
+    Cache.keys(listStatsCache),
+  ];
+  const sweepCaches: Effect.Effect<void> = Effect.sleep(CACHE_SWEEP_INTERVAL).pipe(
     Effect.andThen(
       Effect.suspend(() => {
-        diffSweepPending = false;
+        cacheSweepPending = false;
         return staleDiff.dropExpired;
       }),
     ),
     Effect.flatMap((stale) =>
-      Effect.map(Cache.keys(diffCache), (keys) => stale + Array.from(keys).length),
+      Effect.map(Effect.all(sweptCacheKeys()), (live) =>
+        live.reduce((held, keys) => held + Array.from(keys).length, stale),
+      ),
     ),
     Effect.map((held) => {
-      if (held > 0) armDiffSweep();
+      if (held > 0) armCacheSweep();
     }),
   );
   const readDiff = (input: PullRequestDiffInput) => {
@@ -3769,7 +3788,7 @@ export const make = Effect.gen(function* () {
     );
     const read = Cache.get(diffCache, key).pipe(
       Effect.ensuring(evictDiffs),
-      Effect.ensuring(Effect.sync(armDiffSweep)),
+      Effect.ensuring(Effect.sync(armCacheSweep)),
     );
     return { key, read };
   };
@@ -3809,10 +3828,10 @@ export const make = Effect.gen(function* () {
     );
 
   const filesViewedCache = yield* Cache.makeWith(
-    (key: string) => {
+    sweptLookup((key: string) => {
       const [referenceKey] = JSON.parse(key) as [string, number];
       return viewedFiles.filesViewed(refOfCacheKey(referenceKey));
-    },
+    }),
     {
       capacity: FILES_VIEWED_CACHE_CAPACITY,
       timeToLive: (exit) => (Exit.isSuccess(exit) ? FILES_VIEWED_CACHE_TTL : Duration.zero),
@@ -3827,7 +3846,7 @@ export const make = Effect.gen(function* () {
     );
 
   const listStatsCache = yield* Cache.makeWith(
-    (key: string) => {
+    sweptLookup((key: string) => {
       const [, refs] = JSON.parse(key) as [
         number,
         ReadonlyArray<[string, string, string, number, number]>,
@@ -3844,7 +3863,7 @@ export const make = Effect.gen(function* () {
           Clock.currentTimeMillis.pipe(Effect.map((at) => ({ result, at }))),
         ),
       );
-    },
+    }),
     {
       capacity: LIST_STATS_CACHE_CAPACITY,
       timeToLive: (exit) => (Exit.isSuccess(exit) ? LIST_STATS_CACHE_TTL : Duration.zero),
