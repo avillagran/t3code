@@ -1,6 +1,8 @@
 import { SourceControlProviderKind } from "@t3tools/contracts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as NodeV8 from "node:v8";
+import * as NodeVM from "node:vm";
 import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { assert, expect, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
@@ -4876,6 +4878,48 @@ it.effect("pauses uncached activity on a host after one activity read is rate li
       },
     });
     assert.strictEqual(activityReads, 1);
+  }),
+);
+
+it.effect("releases expired activity and change breakdowns nobody reads again", () =>
+  Effect.gen(function* () {
+    NodeV8.setFlagsFromString("--expose-gc");
+    const collect = NodeVM.runInNewContext("gc") as () => void;
+    // A weak reference keeps its target for the rest of the job that created it.
+    const settle = Effect.yieldNow.pipe(Effect.andThen(Effect.sync(collect)));
+    const service = yield* makeService({
+      projects: [project({ id: "p1", title: "web", workspaceRoot: "/a", repository: "acme/web" })],
+      providers: [
+        fakePullRequestProvider(SourceControlProviderKind.make("github"), {
+          getChangeRequestActivity: () =>
+            Effect.sync(() => ({
+              comments: [],
+              commentCount: 0,
+              commentsTruncated: false,
+              reviewThreads: [],
+              commits: [],
+            })),
+          getFileStats: () => Effect.sync(() => ({ files: [], truncated: false })),
+        }),
+      ],
+    });
+    const reference = { projectId: "p1" as ProjectId, repository: "acme/web", number: 1 };
+    const activity = new WeakRef(yield* service.activity(reference));
+    // A null breakdown would make the weak-reference assertions vacuous.
+    const breakdownRef = yield* Effect.map(
+      service.changeBreakdown(reference),
+      (breakdown) => new WeakRef(breakdown ?? assert.fail("expected a change breakdown")),
+    );
+
+    yield* TestClock.adjust("30 seconds");
+    yield* settle;
+    assert.isDefined(activity.deref());
+    assert.isDefined(breakdownRef.deref());
+
+    yield* TestClock.adjust("2 minutes");
+    yield* settle;
+    assert.isUndefined(activity.deref());
+    assert.isUndefined(breakdownRef.deref());
   }),
 );
 

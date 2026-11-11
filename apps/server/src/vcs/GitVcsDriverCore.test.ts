@@ -4,6 +4,8 @@ import * as NodeFS from "node:fs";
 import * as NodeNet from "node:net";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
+import * as NodeV8 from "node:v8";
+import * as NodeVM from "node:vm";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -1709,6 +1711,33 @@ it.effect("invalidates a ref snapshot when a mutation fails after changing Git",
       ),
     ),
   ),
+);
+
+it.effect("releases a ref snapshot superseded by a refresh", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      NodeV8.setFlagsFromString("--expose-gc");
+      const collect = NodeVM.runInNewContext("gc") as () => void;
+      const cwd = yield* makeTmpDir();
+      yield* initRepoWithCommit(cwd);
+      yield* git(cwd, ["remote", "add", "origin", "git@example.invalid:owner/repo.git"]);
+      yield* git(cwd, ["update-ref", "refs/remotes/origin/feature", "HEAD"]);
+      const driver = yield* makeGitVcsDriverCore();
+      // Remote refs are returned from the cached snapshot as-is.
+      const remoteRef = Effect.map(
+        driver.listRefs({ cwd, refresh: true }),
+        (result) => new WeakRef(result.refs.find((ref) => ref.isRemote) ?? assert.fail()),
+      );
+      const first = yield* remoteRef;
+      yield* TestClock.adjust("6 seconds");
+      const second = yield* remoteRef;
+      // A weak reference keeps its target for the rest of the job that created it.
+      yield* Effect.yieldNow;
+      collect();
+      assert.isUndefined(first.deref());
+      assert.isDefined(second.deref());
+    }),
+  ).pipe(Effect.provide(layerTest)),
 );
 
 it.effect("marks the current branch when worktree metadata is unavailable", () =>
