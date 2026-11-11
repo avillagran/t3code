@@ -120,6 +120,9 @@ export class DesktopBrowserHost extends Context.Service<
       readonly key: DesktopBrowserTabKey;
       readonly active: boolean;
     }>;
+    readonly agentTurnActive: (threadId: string) => boolean;
+    /** Threads whose agent turn started or ended. */
+    readonly agentTurnChanges: Stream.Stream<string>;
   }
 >()("@t3tools/desktop/preview/DesktopBrowserHost") {}
 
@@ -135,6 +138,7 @@ export const make = Effect.gen(function* () {
     readonly key: DesktopBrowserTabKey;
     readonly active: boolean;
   }>();
+  const agentTurnChanges = yield* PubSub.unbounded<string>();
   const runFork = Effect.runForkWith(yield* Effect.context<never>());
   const tabs = new Map<string, AttachedTab>();
   /** Threads whose agent turn runs, by the server's account. */
@@ -343,7 +347,7 @@ export const make = Effect.gen(function* () {
    * session, so this cannot spare other sessions; a viewer's screencast still holds.
    */
   const endAgentTurn = (threadId: string) => {
-    agentTurns.delete(threadId);
+    if (agentTurns.delete(threadId)) runFork(PubSub.publish(agentTurnChanges, threadId));
     for (const tab of tabs.values()) {
       if (tab.key.threadId !== threadId) continue;
       tab.agentUsed = false;
@@ -636,8 +640,12 @@ export const make = Effect.gen(function* () {
       const command = decodeCommand(line);
       if (Option.isNone(command)) return;
       if (command.value.type === "turn") {
-        if (command.value.active) agentTurns.add(command.value.threadId);
-        else endAgentTurn(command.value.threadId);
+        const { threadId } = command.value;
+        if (!command.value.active) endAgentTurn(threadId);
+        else if (!agentTurns.has(threadId)) {
+          agentTurns.add(threadId);
+          runFork(PubSub.publish(agentTurnChanges, threadId));
+        }
         return;
       }
       const tab = tabs.get(keyOf(command.value));
@@ -667,7 +675,10 @@ export const make = Effect.gen(function* () {
 
   const announceAll = Effect.suspend(() => {
     // A new backend: the old one's turns ended without telling us.
-    agentTurns.clear();
+    for (const threadId of agentTurns) {
+      agentTurns.delete(threadId);
+      runFork(PubSub.publish(agentTurnChanges, threadId));
+    }
     return Effect.forEach(
       [...tabs.values()],
       (tab) => {
@@ -690,6 +701,8 @@ export const make = Effect.gen(function* () {
   return DesktopBrowserHost.of({
     pointers: Stream.fromPubSub(pointers),
     painting: Stream.fromPubSub(painting),
+    agentTurnActive: (threadId) => agentTurns.has(threadId),
+    agentTurnChanges: Stream.fromPubSub(agentTurnChanges),
     // Subscribes before announcing, so no attach falls between the two.
     events: Stream.unwrap(
       Effect.gen(function* () {

@@ -46,14 +46,23 @@ function hostedBrowserSessions(
               snapshot.runtime !== "server" ||
               rendersServerTabNatively(threadRef.environmentId, primaryEnvironmentId, snapshot),
           )
-          .map((snapshot) => ({
-            threadRef,
-            snapshot,
-            runtimeTabId: previewRuntimeTabId(threadRef, previewState.serverEpoch, snapshot.tabId),
-            pictureInPicture:
-              previewState.desktopByTabId[snapshot.tabId]?.pictureInPicture ?? false,
-            zoomFactor: previewState.desktopByTabId[snapshot.tabId]?.zoomFactor ?? 1,
-          }))
+          .map((snapshot) => {
+            const desktop = previewState.desktopByTabId[snapshot.tabId];
+            return {
+              threadRef,
+              snapshot,
+              runtimeTabId: previewRuntimeTabId(
+                threadRef,
+                previewState.serverEpoch,
+                snapshot.tabId,
+              ),
+              pictureInPicture: desktop?.pictureInPicture ?? false,
+              zoomFactor: desktop?.zoomFactor ?? 1,
+              guestBusy:
+                desktop !== undefined &&
+                (desktop.audible || desktop.inUse || desktop.controller !== "none"),
+            };
+          })
       : [];
   });
   // Electron destroys a moved webview's guest, so the render order must not follow the server's
@@ -134,31 +143,36 @@ export function ElectronBrowserHost() {
   if (!isElectron) return null;
   return (
     <div className="contents" data-electron-browser-host>
-      {sessions.map(({ threadRef, snapshot, runtimeTabId, pictureInPicture, zoomFactor }) => {
-        const url = snapshot.navStatus._tag === "Idle" ? null : snapshot.navStatus.url;
-        return (
-          <AuthorizedBrowserWebview
-            key={runtimeTabId}
-            threadRef={threadRef}
-            tabId={snapshot.tabId}
-            runtimeTabId={runtimeTabId}
-            initialUrl={url}
-            viewport={snapshot.viewport ?? FILL_PREVIEW_VIEWPORT}
-            pictureInPicture={pictureInPicture}
-            profileId={snapshot.profileId}
-            zoomFactor={zoomFactor}
-            serverDriven={snapshot.runtime === "server"}
-            {...(snapshot.runtime === "server"
-              ? {
-                  serverRendering: {
-                    colorScheme: snapshot.colorScheme ?? "system",
-                    zoomFactor: snapshot.zoomFactor ?? 1,
-                  },
-                }
-              : {})}
-          />
-        );
-      })}
+      {sessions.map(
+        ({ threadRef, snapshot, runtimeTabId, pictureInPicture, zoomFactor, guestBusy }) => {
+          const url = snapshot.navStatus._tag === "Idle" ? null : snapshot.navStatus.url;
+          return (
+            <AuthorizedBrowserWebview
+              key={runtimeTabId}
+              threadRef={threadRef}
+              tabId={snapshot.tabId}
+              runtimeTabId={runtimeTabId}
+              initialUrl={url}
+              viewport={snapshot.viewport ?? FILL_PREVIEW_VIEWPORT}
+              pictureInPicture={pictureInPicture}
+              profileId={snapshot.profileId}
+              zoomFactor={zoomFactor}
+              guestBusy={guestBusy}
+              // The server republishes a session it wants to drive; that wakes a discarded guest.
+              wakeKey={snapshot.runtime === "server" ? snapshot : null}
+              serverDriven={snapshot.runtime === "server"}
+              {...(snapshot.runtime === "server"
+                ? {
+                    serverRendering: {
+                      colorScheme: snapshot.colorScheme ?? "system",
+                      zoomFactor: snapshot.zoomFactor ?? 1,
+                    },
+                  }
+                : {})}
+            />
+          );
+        },
+      )}
     </div>
   );
 }
