@@ -617,6 +617,8 @@ export interface DesktopPreviewTabState {
   controller: "human" | "agent" | "none";
   /** A screenshot or stream of the guest is pending, so the client keeps it painting while hidden. */
   capturing: boolean;
+  /** DevTools or the thread's running agent turn uses the guest, so the client keeps it alive while hidden. */
+  inUse: boolean;
   favicon?: DesktopPreviewFavicon;
   updatedAt: string;
 }

@@ -51,6 +51,9 @@ declare global {
   }
 }
 
+/** A hidden guest left idle this long is destroyed; its tab reloads the session URL when shown. */
+export const HIDDEN_GUEST_DISCARD_DELAY_MS = 5 * 60_000;
+
 export function HostedBrowserWebview(props: {
   readonly threadRef: ScopedThreadRef;
   readonly tabId: string;
@@ -61,6 +64,10 @@ export function HostedBrowserWebview(props: {
   /** Fixed for the tab lifetime; Electron reads partition before guest attachment. */
   readonly profileId: string | undefined;
   readonly zoomFactor: number;
+  /** The page plays media or DevTools, an agent turn, or a person's input uses it. */
+  readonly guestBusy?: boolean;
+  /** A new value wakes a discarded guest. */
+  readonly wakeKey?: unknown;
   readonly serverDriven?: boolean;
   readonly serverRendering?: {
     readonly colorScheme: DesktopPreviewColorScheme;
@@ -76,6 +83,8 @@ export function HostedBrowserWebview(props: {
     pictureInPicture,
     zoomFactor,
     profileId,
+    guestBusy = false,
+    wakeKey = null,
     serverDriven = false,
     serverRendering,
   } = props;
@@ -147,6 +156,28 @@ export function HostedBrowserWebview(props: {
     setRecoverySrc(initialUrl ?? initialSrc);
     setWebviewGeneration((generation) => generation + 1);
   });
+  const renderingActive = active || backgroundActivity || pictureInPicture || recordingActive;
+  const keepGuest = renderingActive || guestBusy;
+  const [discarded, setDiscarded] = useState(false);
+  const [seenWakeKey, setSeenWakeKey] = useState(wakeKey);
+  if (discarded && (keepGuest || wakeKey !== seenWakeKey)) {
+    setDiscarded(false);
+    setRecoverySrc(initialUrl ?? initialSrc);
+    setWebviewGeneration((generation) => generation + 1);
+  }
+  if (wakeKey !== seenWakeKey) setSeenWakeKey(wakeKey);
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a timer discards the guest after it stays hidden and idle
+  useEffect(() => {
+    if (keepGuest || discarded) return;
+    const timeout = window.setTimeout(() => setDiscarded(true), HIDDEN_GUEST_DISCARD_DELAY_MS);
+    return () => window.clearTimeout(timeout);
+  }, [
+    discarded,
+    keepGuest,
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- A wake restarts the idle wait.
+    wakeKey,
+  ]);
 
   const setWebviewRef = (node: HTMLElement | null) => {
     webviewRef.current = node as ElectronWebview | null;
@@ -339,7 +370,6 @@ export function HostedBrowserWebview(props: {
     else void previewBridge?.goForward(runtimeTabId);
   };
 
-  const renderingActive = active || backgroundActivity || pictureInPicture || recordingActive;
   const viewportTransform = resolveBrowserViewportTransform(layout.viewportScale, fullDetail);
   const wrapperStyle = resolveHostedBrowserWebviewWrapperStyle({
     active,
@@ -373,56 +403,58 @@ export function HostedBrowserWebview(props: {
             onChange={commitViewportChange}
           />
         ) : null}
-        <div
-          className="absolute"
-          style={{
-            left: layout.viewportX,
-            top: layout.viewportY,
-            width: layout.viewportWidth,
-            height: layout.viewportHeight,
-            transformStyle: viewportTransform && fullDetail ? "preserve-3d" : undefined,
-          }}
-        >
-          <webview
-            key={webviewGeneration}
-            ref={setWebviewRef}
-            // Electron needs allowpopups at attachment. React drops boolean values for unknown attributes.
-            {...({ allowpopups: "true" } as unknown as { readonly allowpopups?: boolean })}
-            src={webviewGeneration === 0 ? initialSrc : recoverySrc}
-            partition={config.partition}
-            webpreferences={config.webPreferences}
-            {...(config.preloadUrl ? { preload: config.preloadUrl } : {})}
-            data-preview-tab={runtimeTabId}
-            data-preview-server-tab={tabId}
-            data-preview-viewport-mode={effectiveViewport._tag}
-            data-preview-viewport-key={browserViewportSettingKey(effectiveViewport)}
-            data-preview-css-width={
-              fittedSourceViewport
-                ? fittedSourceViewport.width
-                : effectiveViewport._tag === "fill"
-                  ? Math.max(1, Math.round(layout.viewportWidth / layoutZoomFactor))
-                  : effectiveViewport.width
-            }
-            data-preview-css-height={
-              fittedSourceViewport
-                ? fittedSourceViewport.height
-                : effectiveViewport._tag === "fill"
-                  ? Math.max(1, Math.round(layout.viewportHeight / layoutZoomFactor))
-                  : effectiveViewport.height
-            }
-            aria-hidden={active ? undefined : true}
-            className={cn(
-              "absolute top-0 left-0 flex overflow-hidden bg-white",
-              active && !layout.fillsPanel && "ring-1 ring-border/70 shadow-sm",
-            )}
+        {discarded ? null : (
+          <div
+            className="absolute"
             style={{
-              width: layout.viewportWidth / layout.viewportScale,
-              height: layout.viewportHeight / layout.viewportScale,
-              transform: viewportTransform,
-              transformOrigin: "top left",
+              left: layout.viewportX,
+              top: layout.viewportY,
+              width: layout.viewportWidth,
+              height: layout.viewportHeight,
+              transformStyle: viewportTransform && fullDetail ? "preserve-3d" : undefined,
             }}
-          />
-        </div>
+          >
+            <webview
+              key={webviewGeneration}
+              ref={setWebviewRef}
+              // Electron needs allowpopups at attachment. React drops boolean values for unknown attributes.
+              {...({ allowpopups: "true" } as unknown as { readonly allowpopups?: boolean })}
+              src={webviewGeneration === 0 ? initialSrc : recoverySrc}
+              partition={config.partition}
+              webpreferences={config.webPreferences}
+              {...(config.preloadUrl ? { preload: config.preloadUrl } : {})}
+              data-preview-tab={runtimeTabId}
+              data-preview-server-tab={tabId}
+              data-preview-viewport-mode={effectiveViewport._tag}
+              data-preview-viewport-key={browserViewportSettingKey(effectiveViewport)}
+              data-preview-css-width={
+                fittedSourceViewport
+                  ? fittedSourceViewport.width
+                  : effectiveViewport._tag === "fill"
+                    ? Math.max(1, Math.round(layout.viewportWidth / layoutZoomFactor))
+                    : effectiveViewport.width
+              }
+              data-preview-css-height={
+                fittedSourceViewport
+                  ? fittedSourceViewport.height
+                  : effectiveViewport._tag === "fill"
+                    ? Math.max(1, Math.round(layout.viewportHeight / layoutZoomFactor))
+                    : effectiveViewport.height
+              }
+              aria-hidden={active ? undefined : true}
+              className={cn(
+                "absolute top-0 left-0 flex overflow-hidden bg-white",
+                active && !layout.fillsPanel && "ring-1 ring-border/70 shadow-sm",
+              )}
+              style={{
+                width: layout.viewportWidth / layout.viewportScale,
+                height: layout.viewportHeight / layout.viewportScale,
+                transform: viewportTransform,
+                transformOrigin: "top left",
+              }}
+            />
+          </div>
+        )}
         {active && effectiveViewport._tag !== "fill" && !fittedSourceViewport ? (
           <>
             <BrowserViewportResizeHandles

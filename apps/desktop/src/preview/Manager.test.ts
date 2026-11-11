@@ -689,6 +689,7 @@ describe("PreviewManager", () => {
                 humanStartedDownload: () => true,
                 agentLedPage: () => false,
                 placeDownload: () => true,
+                agentTurnActive: () => false,
               }),
               Layer.mock(PreviewPasskeys.PreviewPasskeys)({
                 bridgeEnabled: false,
@@ -2623,6 +2624,69 @@ describe("PreviewManager", () => {
       expect(JSON.parse(yield* Queue.take(lines))).toEqual({ type: "attached", ...serverTab });
       expect(statuses.at(-1)?.kind).toBe("Success");
     }).pipe(Effect.provide(managerLayer())),
+  );
+
+  effectIt.effect(
+    "marks a native server tab in use while its thread's agent turn runs or DevTools are open",
+    () =>
+      Effect.gen(function* () {
+        const host = yield* DesktopBrowserHost.DesktopBrowserHost;
+        const serverTab = { threadId: "thread-1", tabId: "server-tab-1" };
+        const onceListeners = new Map<string, () => void>();
+        let devToolsOpened = false;
+        const contents = Object.assign(
+          makeTestPreviewWebContents(async () => {
+            throw new Error("unused");
+          }, 42),
+          {
+            isDevToolsOpened: () => devToolsOpened,
+            getUserAgent: () => "Electron",
+            once: (event: string, listener: () => void) => {
+              onceListeners.set(event, listener);
+            },
+            openDevTools: vi.fn(() => {
+              devToolsOpened = true;
+              onceListeners.get("devtools-opened")?.();
+            }),
+          },
+        );
+        fromId.mockReturnValue(contents);
+        const manager = yield* PreviewManager.PreviewManager;
+        const inUse = yield* Queue.unbounded<boolean>();
+        let lastInUse = false;
+        yield* manager.subscribeStateChanges((_tabId, state) => {
+          if (state.inUse === lastInUse) return Effect.void;
+          lastInUse = state.inUse;
+          return Queue.offer(inUse, state.inUse).pipe(Effect.asVoid);
+        });
+        const attached = yield* Deferred.make<void>();
+        yield* host.events.pipe(
+          Stream.runForEach((line) =>
+            new TextDecoder().decode(line).includes('"type":"attached"')
+              ? Deferred.succeed(attached, undefined)
+              : Effect.void,
+          ),
+          Effect.forkScoped,
+        );
+        yield* manager.createTab("tab_1", { serverTab });
+        yield* manager.registerWebview("tab_1", 42);
+        yield* Deferred.await(attached);
+        const turn = (active: boolean) =>
+          host.handleCommandLine(
+            JSON.stringify({ type: "turn", threadId: serverTab.threadId, active }),
+          );
+
+        yield* turn(true);
+        expect(yield* Queue.take(inUse)).toBe(true);
+        yield* turn(false);
+        expect(yield* Queue.take(inUse)).toBe(false);
+
+        yield* manager.openDevTools("tab_1");
+        expect(yield* Queue.take(inUse)).toBe(true);
+        devToolsOpened = false;
+        onceListeners.get("devtools-closed")?.();
+        expect(yield* Queue.take(inUse)).toBe(false);
+      }).pipe(Effect.provide(managerLayer()), Effect.scoped),
   );
 
   effectIt.effect("discards a screenshot that resolves after its guest is replaced", () =>

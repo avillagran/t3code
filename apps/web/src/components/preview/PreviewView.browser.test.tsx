@@ -117,6 +117,7 @@ vi.mock(import("~/previewStateStore"), async (original) => ({
         audioMuted: false,
         audible: false,
         controller: "none",
+        inUse: false,
       },
     },
     recentlySeenUrls: [],

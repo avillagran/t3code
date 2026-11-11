@@ -118,6 +118,7 @@ export interface PreviewTabState {
   audible: boolean;
   controller: "human" | "agent" | "none";
   capturing: boolean;
+  inUse: boolean;
   favicon?: DesktopPreviewFavicon;
   serverTab?: { readonly threadId: string; readonly tabId: string };
   updatedAt: string;
@@ -1776,6 +1777,9 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
           audible: false,
           controller: "none",
           capturing: false,
+          inUse:
+            defaults?.serverTab !== undefined &&
+            browserHost.agentTurnActive(defaults.serverTab.threadId),
           updatedAt,
         };
         return [
@@ -1854,6 +1858,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       audible: false,
       controller: "none",
       capturing: false,
+      inUse: false,
       updatedAt,
     };
     yield* emit(tabId, closed);
@@ -2117,6 +2122,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         audible: current?.audible ?? false,
         controller: current?.controller ?? "none",
         capturing: current?.capturing ?? false,
+        inUse: current?.inUse ?? false,
         ...(current?.favicon ? { favicon: current.favicon } : {}),
         ...(current?.serverTab ? { serverTab: current.serverTab } : {}),
         updatedAt,
@@ -2259,7 +2265,9 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     }
     yield* detachControlSession(wc.id);
     yield* attempt({ operation: "openDevTools", tabId, webContentsId: wc.id }, () => {
+      wc.once("devtools-opened", () => runFork(syncTabInUse(tabId)));
       wc.once("devtools-closed", () => {
+        runFork(syncTabInUse(tabId));
         if (!wc.isDestroyed()) runFork(restoreControlSession(tabId, wc));
       });
       wc.openDevTools({ mode: "detach" });
@@ -2573,6 +2581,8 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
             description: navStatus.description,
           });
         }
+        // Turns that changed before this subscription started.
+        yield* syncTabInUse(tabId);
       }
       if (afterAttach.colorScheme !== "system") {
         yield* attemptPromise({ operation: "applyColorScheme", tabId, webContentsId: wc.id }, () =>
@@ -2648,6 +2658,24 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
 
   // A window reload or guest crash destroys the guest without the renderer reporting it hidden.
   // The renderer reports again once a new guest registers.
+  const syncTabInUse = Effect.fn("PreviewManager.syncTabInUse")(function* (tabId: string) {
+    const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+    if (!tab) return;
+    const wc = tab.webContentsId == null ? undefined : webContents.fromId(tab.webContentsId);
+    const inUse =
+      (tab.serverTab !== undefined && browserHost.agentTurnActive(tab.serverTab.threadId)) ||
+      (wc !== undefined && !wc.isDestroyed() && wc.isDevToolsOpened());
+    if (tab.inUse !== inUse) yield* update(tabId, { inUse });
+  });
+
+  const syncThreadTabsInUse = Effect.fn("PreviewManager.syncThreadTabsInUse")(function* (
+    threadId: string,
+  ) {
+    for (const tab of (yield* SynchronizedRef.get(tabsRef)).values()) {
+      if (tab.serverTab?.threadId === threadId) yield* syncTabInUse(tab.tabId);
+    }
+  });
+
   const hideDestroyedGuest = Effect.fnUntraced(function* (webContentsId: number) {
     for (const tab of (yield* SynchronizedRef.get(tabsRef)).values()) {
       if (tab.webContentsId === webContentsId && tab.serverTab) {
@@ -3643,6 +3671,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       [
         browserHost.pointers.pipe(Stream.runForEach(emitAgentPointer), listen),
         browserHost.painting.pipe(Stream.runForEach(updateServerTabCapturing), listen),
+        browserHost.agentTurnChanges.pipe(Stream.runForEach(syncThreadTabsInUse), listen),
       ],
       { discard: true },
     );
