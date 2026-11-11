@@ -56,7 +56,7 @@ import packageJson from "../../package.json" with { type: "json" };
 
 vi.mock("effect/SynchronizedRef", async (importOriginal) => {
   const original = await importOriginal<typeof SynchronizedRef>();
-  return { ...original, make: vi.fn(original.make) };
+  return { ...original, make: vi.fn(original.make), modify: vi.fn(original.modify) };
 });
 
 // The server omits DOM types, which include TypeScript's WebAssembly declarations.
@@ -2886,6 +2886,81 @@ it.layer(
       expect(process.resizeCalls).toEqual([]);
       expect(process.writes).toEqual([]);
       expect(process.killSignals).toEqual([]);
+    }),
+  );
+
+  it.effect("keeps an exited terminal's history only on disk and still shows and restarts it", () =>
+    Effect.gen(function* () {
+      type HistoryState = { sessions: ReadonlyMap<string, { history: unknown }> };
+      let state: SynchronizedRef.SynchronizedRef<HistoryState> | undefined;
+      const historyDropped = yield* Deferred.make<void>();
+      const makeRef = vi.mocked(SynchronizedRef.make).getMockImplementation()!;
+      using _capture = vi.spyOn(SynchronizedRef, "make").mockImplementation(<A>(value: A) =>
+        makeRef(value).pipe(
+          Effect.tap((ref) =>
+            Effect.sync(() => {
+              if (typeof value === "object" && value !== null && "sessions" in value) {
+                state = ref as unknown as SynchronizedRef.SynchronizedRef<HistoryState>;
+              }
+            }),
+          ),
+        ),
+      );
+      // The manager calls modify data-first; signal once a write has dropped an in-memory history.
+      const modify = vi.mocked(SynchronizedRef.modify).getMockImplementation() as <A, B>(
+        self: SynchronizedRef.SynchronizedRef<A>,
+        f: (a: A) => readonly [B, A],
+      ) => Effect.Effect<B>;
+      using _observe = vi
+        .spyOn(SynchronizedRef, "modify")
+        .mockImplementation((<A, B>(
+          self: SynchronizedRef.SynchronizedRef<A>,
+          f: (a: A) => readonly [B, A],
+        ) =>
+          modify(self, f).pipe(
+            Effect.tap(() =>
+              state !== undefined &&
+              (self as unknown) === state &&
+              [...Ref.getUnsafe(state.backing).sessions.values()].some(
+                (session) => session.history === null,
+              )
+                ? Deferred.succeed(historyDropped, undefined)
+                : Effect.void,
+            ),
+          )) as typeof SynchronizedRef.modify);
+
+      const { manager, ptyAdapter } = yield* createManager();
+      yield* manager.open(openInput());
+      const exited = yield* Deferred.make<void>();
+      const unsubscribeExit = yield* manager.subscribe((event) =>
+        event.type === "exited"
+          ? Deferred.succeed(exited, undefined).pipe(Effect.asVoid)
+          : Effect.void,
+      );
+      yield* Effect.addFinalizer(() => Effect.sync(unsubscribeExit));
+      ptyAdapter.processes[0]!.emitData("before exit\n");
+      ptyAdapter.processes[0]!.emitExit({ exitCode: 0, signal: 0 });
+      yield* Deferred.await(exited);
+      yield* Deferred.await(historyDropped);
+
+      const events: TerminalAttachStreamEvent[] = [];
+      const unsubscribe = yield* manager.attachStream({ ...openInput(), resume: true }, (event) =>
+        Effect.sync(() => {
+          events.push(event);
+        }),
+      );
+      unsubscribe();
+      expect(events).toMatchObject([
+        { type: "snapshot", snapshot: { status: "exited", history: "before exit\n" } },
+      ]);
+      expect(ptyAdapter.spawnInputs).toHaveLength(1);
+
+      const restarted = yield* manager.open(openInput());
+      expect(restarted).toMatchObject({ status: "running", history: "" });
+      ptyAdapter.processes[1]!.emitData("after restart\n");
+      yield* manager.close({ threadId: "thread-1" });
+      const reopened = yield* manager.open(openInput());
+      expect(reopened.history).toContain("after restart\n");
     }),
   );
 

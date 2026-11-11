@@ -296,7 +296,8 @@ interface TerminalSessionState {
   worktreePath: string | null;
   status: TerminalSessionStatus;
   pid: number | null;
-  history: BoundedTerminalHistory;
+  // Null once an exited session's history is on disk; read it back where it is shown or resumed.
+  history: BoundedTerminalHistory | null;
   pendingHistoryControlSequence: string;
   pendingProcessEvents: Array<PendingProcessEvent | undefined>;
   pendingProcessEventIndex: number;
@@ -351,6 +352,7 @@ type DrainProcessEventAction =
   | {
       type: "exit";
       process: PtyAdapter.PtyProcess | null;
+      history: BoundedTerminalHistory | null;
       threadId: string;
       terminalId: string;
       sequence: number;
@@ -395,7 +397,10 @@ function terminalWireLabel(session: TerminalSessionState): string {
   return truncateTerminalWireLabel(getTerminalLabel(session.terminalId));
 }
 
-function snapshot(session: TerminalSessionState): TerminalSessionSnapshot {
+function snapshot(
+  session: TerminalSessionState,
+  history = session.history,
+): TerminalSessionSnapshot {
   return {
     threadId: session.threadId,
     terminalId: session.terminalId,
@@ -403,7 +408,7 @@ function snapshot(session: TerminalSessionState): TerminalSessionSnapshot {
     worktreePath: session.worktreePath,
     status: session.status,
     pid: session.pid,
-    history: session.history.value(),
+    history: history?.value() ?? "",
     exitCode: session.exitCode,
     exitSignal: session.exitSignal,
     label: terminalWireLabel(session),
@@ -2143,27 +2148,41 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         return;
       }
 
-      const update = request.history.persistenceUpdate(
-        request.immediate ? undefined : persistedHistory.get(request.history),
+      const { history } = request;
+      const update = history.persistenceUpdate(
+        request.immediate ? undefined : persistedHistory.get(history),
       );
-      if (update.append && update.data.length === 0) return;
-      // An append may partially succeed before failing. Retry from a full snapshot,
-      // never from an uncertain file offset.
-      persistedHistory.delete(request.history);
-      yield* fileSystem
-        .writeFileString(historyPath(threadId, terminalId), update.data, {
-          flag: update.append ? "a" : "w",
-        })
-        .pipe(
-          Effect.tap(() => Effect.sync(() => persistedHistory.set(request.history, update.cursor))),
-          Effect.catch((error) =>
-            Effect.logWarning("failed to persist terminal history", {
-              threadId,
-              terminalId,
-              error,
-            }),
-          ),
-        );
+      let written = true;
+      if (!update.append || update.data.length > 0) {
+        // An append may partially succeed before failing. Retry from a full snapshot,
+        // never from an uncertain file offset.
+        persistedHistory.delete(history);
+        written = yield* fileSystem
+          .writeFileString(historyPath(threadId, terminalId), update.data, {
+            flag: update.append ? "a" : "w",
+          })
+          .pipe(
+            Effect.tap(() => Effect.sync(() => persistedHistory.set(history, update.cursor))),
+            Effect.as(true),
+            Effect.catch((error) =>
+              Effect.logWarning("failed to persist terminal history", {
+                threadId,
+                terminalId,
+                error,
+              }).pipe(Effect.as(false)),
+            ),
+          );
+      }
+      if (!written) return;
+      // Exited sessions can hold up to the byte limit each; keep only the disk copy once it matches.
+      yield* modifyManagerState((state) => {
+        const session = state.sessions.get(sessionKey);
+        if (session?.status === "exited" && session.history === history) {
+          const pending = history.persistenceUpdate(persistedHistory.get(history));
+          if (pending.append && pending.data.length === 0) session.history = null;
+        }
+        return [undefined, state] as const;
+      });
     }),
   });
 
@@ -2312,6 +2331,31 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     }
     return new BoundedTerminalHistory(historyLineLimit, "", historyByteLimit);
   });
+
+  const readSessionHistory = (session: TerminalSessionState) =>
+    session.history !== null
+      ? Effect.succeed(session.history)
+      : readHistory(session.threadId, session.terminalId).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("failed to read terminal history", {
+              threadId: session.threadId,
+              terminalId: session.terminalId,
+              error,
+            }).pipe(Effect.as(new BoundedTerminalHistory(historyLineLimit, "", historyByteLimit))),
+          ),
+        );
+
+  const readSnapshot = (session: TerminalSessionState) =>
+    Effect.map(readSessionHistory(session), (history) => snapshot(session, history));
+
+  const clearSessionHistory = (session: TerminalSessionState) => {
+    if (session.history === null) {
+      session.history = new BoundedTerminalHistory(historyLineLimit, "", historyByteLimit);
+    } else {
+      session.history.clear();
+    }
+    return session.history;
+  };
 
   const deleteHistory = Effect.fn("terminal.deleteHistory")(function* (
     threadId: string,
@@ -2478,8 +2522,9 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
             nextEvent.data,
           );
           session.pendingHistoryControlSequence = sanitized.pendingControlSequence;
-          if (sanitized.visibleText.length > 0) {
-            session.history.append(sanitized.visibleText);
+          const history = session.history;
+          if (sanitized.visibleText.length > 0 && history !== null) {
+            history.append(sanitized.visibleText);
           }
           const eventStamp = advanceEventSequence(session);
 
@@ -2488,7 +2533,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
             threadId: session.threadId,
             terminalId: session.terminalId,
             sequence: eventStamp.sequence,
-            history: sanitized.visibleText.length > 0 ? session.history : null,
+            history: sanitized.visibleText.length > 0 ? history : null,
             data: nextEvent.data,
           } as const;
         }
@@ -2515,6 +2560,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         return {
           type: "exit",
           process,
+          history: session.history,
           threadId: session.threadId,
           terminalId: session.terminalId,
           sequence: eventStamp.sequence,
@@ -2547,6 +2593,9 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         threadId: action.threadId,
         terminalId: action.terminalId,
       });
+      if (action.history !== null) {
+        yield* queuePersist(action.threadId, action.terminalId, action.history);
+      }
       yield* publishEvent({
         type: "exited",
         threadId: action.threadId,
@@ -2585,6 +2634,9 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
       threadId: session.threadId,
       terminalId: session.terminalId,
     });
+    if (session.history !== null) {
+      yield* queuePersist(session.threadId, session.terminalId, session.history);
+    }
     yield* startKillEscalation(process, session.threadId, session.terminalId);
     yield* evictInactiveSessionsIfNeeded();
   });
@@ -2658,6 +2710,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     eventType: "started" | "restarted",
   ) {
     yield* stopProcess(session);
+    if (session.history === null) session.history = yield* readSessionHistory(session);
     yield* Effect.annotateCurrentSpan({
       "terminal.thread_id": session.threadId,
       "terminal.id": session.terminalId,
@@ -2837,7 +2890,9 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     if (Option.isSome(session)) {
       yield* stopProcess(session.value);
       yield* unregisterTerminal({ threadId, terminalId });
-      yield* persistHistory(threadId, terminalId, session.value.history);
+      if (session.value.history !== null) {
+        yield* persistHistory(threadId, terminalId, session.value.history);
+      }
     }
 
     yield* flushPersist(threadId, terminalId);
@@ -3170,21 +3225,21 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
       liveSession.cwd = input.cwd;
       liveSession.worktreePath = nextWorktreePath;
       liveSession.runtimeEnv = nextRuntimeEnv;
-      liveSession.history.clear();
+      const history = clearSessionHistory(liveSession);
       liveSession.pendingHistoryControlSequence = "";
       liveSession.pendingProcessEvents = [];
       liveSession.pendingProcessEventIndex = 0;
       liveSession.processEventDrainRunning = false;
-      yield* persistHistory(liveSession.threadId, liveSession.terminalId, liveSession.history);
+      yield* persistHistory(liveSession.threadId, liveSession.terminalId, history);
     } else if (liveSession.status === "exited" || liveSession.status === "error") {
       liveSession.runtimeEnv = nextRuntimeEnv;
       liveSession.worktreePath = nextWorktreePath;
-      liveSession.history.clear();
+      const history = clearSessionHistory(liveSession);
       liveSession.pendingHistoryControlSequence = "";
       liveSession.pendingProcessEvents = [];
       liveSession.pendingProcessEventIndex = 0;
       liveSession.processEventDrainRunning = false;
-      yield* persistHistory(liveSession.threadId, liveSession.terminalId, liveSession.history);
+      yield* persistHistory(liveSession.threadId, liveSession.terminalId, history);
     }
 
     if (!liveSession.process) {
@@ -3273,7 +3328,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
       yield* resizeSession(session, session.process, targetCols, targetRows);
     }
 
-    return snapshot(session);
+    return yield* readSnapshot(session);
   });
 
   const readAllTerminalMetadata = () =>
@@ -3453,7 +3508,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
   ) =>
     streamSession(
       input,
-      requireSession(input.threadId, input.terminalId).pipe(Effect.map(snapshot)),
+      requireSession(input.threadId, input.terminalId).pipe(Effect.flatMap(readSnapshot)),
       listener,
       registerCleanup,
     );
@@ -3466,7 +3521,9 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     streamSession(
       input,
       getSession(input.threadId, input.terminalId).pipe(
-        Effect.map((session) => (Option.isSome(session) ? snapshot(session.value) : null)),
+        Effect.flatMap((session) =>
+          Option.isSome(session) ? readSnapshot(session.value) : Effect.succeed(null),
+        ),
       ),
       listener,
       registerCleanup,
@@ -3651,7 +3708,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
       Effect.gen(function* () {
         const terminalId = input.terminalId;
         const session = yield* requireSession(input.threadId, terminalId);
-        session.history.clear();
+        const history = clearSessionHistory(session);
         session.pendingHistoryControlSequence = "";
         session.pendingProcessEvents = [];
         session.pendingProcessEventIndex = 0;
@@ -3660,7 +3717,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         // A drain waits for the key to go idle, which never happens while the shell keeps
         // printing; every reader of the file flushes it first.
         yield* persistWorker.enqueue(toSessionKey(input.threadId, terminalId), {
-          history: session.history,
+          history,
           immediate: true,
         });
         yield* publishEvent({
