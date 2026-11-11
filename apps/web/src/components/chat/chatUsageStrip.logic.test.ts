@@ -15,7 +15,14 @@ describe("usageStripItems", () => {
           id: "five_hour",
           kind: "session",
           label: "5h",
-          members: [],
+          members: [
+            {
+              window: {
+                resetsAt: new Date(NOW + 90 * 60_000).toISOString(),
+                windowDurationMins: 300,
+              },
+            },
+          ],
           columns: [],
           remainingPercent: 40,
           usedPercent: 60,
@@ -39,8 +46,20 @@ describe("usageStripItems", () => {
       ],
     } as unknown as LimitPool;
     expect(usageStripItems([pool], NOW)).toMatchObject([
-      { key: "claudeAgent:five_hour", usedPercent: 60, resetsIn: "1h 30m", overPace: true },
-      { key: "claudeAgent:seven_day", usedPercent: 10, resetsIn: null, overPace: false },
+      {
+        key: "claudeAgent:five_hour",
+        usedPercent: 60,
+        resetsIn: "1h 30m",
+        overPace: true,
+        expectedUsedPercent: 70,
+      },
+      {
+        key: "claudeAgent:seven_day",
+        usedPercent: 10,
+        resetsIn: null,
+        overPace: false,
+        expectedUsedPercent: null,
+      },
     ]);
   });
 });
