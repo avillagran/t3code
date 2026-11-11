@@ -155,6 +155,7 @@ export function projectDesktopState(state: DesktopPreviewTabState): DesktopPrevi
     audioMuted: state.audioMuted,
     audible: state.audible,
     controller: state.controller,
+    inUse: state.inUse,
     favicon: state.favicon && originOf(state.favicon.pageUrl) === navOrigin ? state.favicon : null,
   };
 }
