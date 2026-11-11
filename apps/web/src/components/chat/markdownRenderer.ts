@@ -21,8 +21,8 @@ interface MarkdownRendererOptions {
 
 // Elements are immutable, so a remount (a thread switch, a row scrolled back into view)
 // reuses one instead of parsing again. Parsing is most of the cost of rendering markdown.
-// An element and the hast it keeps hold about 20 bytes per source character, so ~10 MB.
-const MAX_CACHED_CHARS = 500_000;
+// An element and the hast it keeps hold about 20 bytes per source character, so ~3 MB.
+const MAX_CACHED_CHARS = 150_000;
 const rendered = new Map<string, ReactElement>();
 let cachedChars = 0;
 let nextRendererId = 0;
