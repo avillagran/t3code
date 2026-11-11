@@ -10,7 +10,7 @@ import {
   type UsageProviderKind,
   type UsageSummaryInput,
 } from "@t3tools/contracts";
-import { CircleAlertIcon, ChevronDownIcon, InfoIcon, SlidersHorizontalIcon } from "lucide-react";
+import { CircleAlertIcon, ChevronDownIcon, InfoIcon, PanelTopIcon, SlidersHorizontalIcon } from "lucide-react";
 import { T, useGT, useLocale, useMessages, Var } from "gt-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
@@ -32,7 +32,11 @@ import {
 } from "@t3tools/shared/usageMerge";
 
 import { cn } from "../../lib/utils";
-import { usePrimarySettings } from "../../hooks/useSettings";
+import {
+  persistClientSettingsPatch,
+  useClientSettings,
+  usePrimarySettings,
+} from "../../hooks/useSettings";
 import { resolveHour12 } from "../../timestampFormat";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { environmentPresentations } from "../../state/presentation";
@@ -69,7 +73,9 @@ import { ScrollArea } from "../ui/scroll-area";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { AppRouteModal, AppRouteModalClose } from "../AppRouteModal";
 import { Skeleton } from "../ui/skeleton";
+import { Switch } from "../ui/switch";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import {
   WorkspaceBreadcrumb,
@@ -458,6 +464,7 @@ export function UsagePage() {
             </Toggle>
           ))}
         </ToggleGroup>
+        <UsageStripToggle compact={false} />
         <Button
           onClick={refreshWindow}
           aria-label={showingLimits ? gt("Refresh limits") : gt("Refresh usage")}
@@ -515,6 +522,7 @@ export function UsagePage() {
             ))}
           </SelectPopup>
         </Select>
+        <UsageStripToggle compact />
         <Button
           onClick={refreshWindow}
           aria-label={showingLimits ? gt("Refresh limits") : gt("Refresh usage")}
@@ -618,6 +626,30 @@ export function UsagePage() {
         />
       ) : null}
     </AppRouteModal>
+  );
+}
+
+function UsageStripToggle({ compact }: { readonly compact: boolean }) {
+  const enabled = useClientSettings((s) => s.chatUsageStripEnabled);
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <label className="flex shrink-0 cursor-pointer items-center gap-1.5 px-1 text-xs whitespace-nowrap text-muted-foreground" />
+        }
+      >
+        {compact ? <PanelTopIcon className="size-3.5" aria-hidden /> : "Show above chat"}
+        <Switch
+          size="sm"
+          aria-label="Show usage above chat"
+          checked={enabled}
+          onCheckedChange={(checked) =>
+            void persistClientSettingsPatch({ chatUsageStripEnabled: Boolean(checked) })
+          }
+        />
+      </TooltipTrigger>
+      <TooltipPopup side="bottom">Show usage above chat</TooltipPopup>
+    </Tooltip>
   );
 }
 
