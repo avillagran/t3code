@@ -8,7 +8,7 @@ import * as Scope from "effect/Scope";
 
 import * as Electron from "electron";
 
-import { watchLinuxColorScheme, type LinuxColorScheme } from "./LinuxColorScheme.ts";
+import type { LinuxColorScheme } from "./LinuxColorScheme.ts";
 
 export class ElectronThemeSetSourceError extends Schema.TaggedError<ElectronThemeSetSourceError>()(
   "ElectronThemeSetSourceError",
@@ -92,7 +92,10 @@ export const makeWith = Effect.fn("ElectronTheme.make")(function* (
 /** @public */
 export const make = Effect.gen(function* () {
   const platform = yield* HostProcess.Platform;
-  return yield* makeWith(platform === "linux" ? watchLinuxColorScheme : undefined);
+  // Keeps dbus-next out of the macOS and Windows main process.
+  const linux =
+    platform === "linux" ? yield* Effect.promise(() => import("./LinuxColorScheme.ts")) : undefined;
+  return yield* makeWith(linux?.watchLinuxColorScheme);
 });
 
 export const layer = Layer.effect(ElectronTheme, make);
