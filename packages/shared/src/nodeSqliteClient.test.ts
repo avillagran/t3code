@@ -574,6 +574,49 @@ it.effect("fails a read-only transaction whose reader stops, then starts a new r
   ),
 );
 
+it.effect("stops a reader after one idle minute, never under an open read, and restarts it", () =>
+  withReaderClient((sql) =>
+    Effect.gen(function* () {
+      const startedBefore = startedWorkers.length;
+      const read = countEntries(sql).pipe(SqliteClient.readOnly);
+      assert.equal(yield* read, 1);
+      assert.equal(startedWorkers.length, startedBefore + 1);
+      const first = startedWorkers.at(-1)!;
+      const firstExit = new Promise<void>((resolve) => first.once("exit", () => resolve()));
+
+      // An open read-only transaction keeps its worker however long it stays idle.
+      const opened = yield* Deferred.make<void>();
+      const finish = yield* Deferred.make<void>();
+      const holder = yield* sql
+        .withTransaction(
+          Effect.gen(function* () {
+            yield* countEntries(sql);
+            yield* Deferred.succeed(opened, undefined);
+            yield* Deferred.await(finish);
+            return yield* countEntries(sql);
+          }),
+        )
+        .pipe(SqliteClient.readOnly, Effect.forkChild);
+      yield* Deferred.await(opened);
+      yield* TestClock.adjust("2 minutes");
+      yield* Deferred.succeed(finish, undefined);
+      assert.equal(yield* Fiber.join(holder), 1);
+
+      // Each read restarts the idle minute.
+      yield* TestClock.adjust("50 seconds");
+      assert.equal(yield* read, 1);
+      yield* TestClock.adjust("50 seconds");
+      assert.equal(yield* read, 1);
+      assert.equal(startedWorkers.length, startedBefore + 1);
+
+      yield* TestClock.adjust("1 minute");
+      assert.equal(yield* read, 1);
+      assert.equal(startedWorkers.length, startedBefore + 2);
+      yield* Effect.promise(() => firstExit);
+    }),
+  ),
+);
+
 const withFileClient = <A, E>(
   setup: (
     sql: SqlClient.SqlClient,

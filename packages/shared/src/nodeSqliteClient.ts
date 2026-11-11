@@ -13,6 +13,7 @@ import { identity } from "effect/Function";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
+import * as RcRef from "effect/RcRef";
 import * as References from "effect/References";
 import * as Schema from "effect/Schema";
 import * as Scheduler from "effect/Scheduler";
@@ -352,6 +353,8 @@ const READER_POOL_SIZE = 4;
 const READER_STARTUP_TIMEOUT = Duration.seconds(10);
 const READER_RETRY_DELAY = Duration.seconds(1);
 const READER_RETRY_MAX_DELAY = Duration.minutes(1);
+// Each reader is a V8 isolate plus its own page and statement caches; stop the ones a burst left idle.
+const READER_IDLE_TIME_TO_LIVE = Duration.minutes(1);
 
 // Bind transactions to one worker; fail after its exit instead of resuming outside the transaction on a replacement.
 const makeWorkerConnection = Effect.fnUntraced(function* (options: {
@@ -584,13 +587,18 @@ const startFailure = (error: SqlError) => {
 // A reader that cannot start turns off the whole pool, so routing never picks a dead slot, until
 // one background retry starts it again.
 const makeReader = Effect.fnUntraced(function* (filename: string, pool: { unavailable: boolean }) {
-  const acquire = yield* makeWorkerConnection({ filename, role: "reader", readOnly: true });
+  // Every claim holds a reference, so a worker stops only with no read or transaction on it.
+  const worker = yield* RcRef.make({
+    acquire: makeWorkerConnection({ filename, role: "reader", readOnly: true }),
+    idleTimeToLive: READER_IDLE_TIME_TO_LIVE,
+  });
+  const acquire = Effect.flatten(RcRef.get(worker));
   const scope = yield* Effect.scope;
   const context = yield* Effect.context<never>();
 
   const recover = (delay: Duration.Duration): Effect.Effect<void> =>
     Effect.sleep(delay).pipe(
-      Effect.andThen(acquire),
+      Effect.andThen(Effect.scoped(acquire)),
       Effect.matchEffect({
         onSuccess: () =>
           Effect.suspend(() => {
@@ -611,7 +619,7 @@ const makeReader = Effect.fnUntraced(function* (filename: string, pool: { unavai
       }),
     );
 
-  return Effect.suspend((): Effect.Effect<Connection | undefined> =>
+  return Effect.suspend((): Effect.Effect<Connection | undefined, never, Scope.Scope> =>
     pool.unavailable
       ? Effect.undefined
       : acquire.pipe(
@@ -959,21 +967,22 @@ const make = Effect.fn("makeWithDatabase")(function* (
           // Holding a permit leaves a slot idle; the lowest wins, so idle slots never start a worker.
           const reader = readers.find((slot) => !slot.claimed)!;
           reader.claimed = true;
+          const claimScope = Scope.makeUnsafe();
           const release = Effect.andThen(
             Effect.sync(() => {
               reader.claimed = false;
             }),
-            readerAdmission.release(1),
+            Effect.andThen(Scope.close(claimScope, Exit.void), readerAdmission.release(1)),
           );
-          return Effect.as(claimed(release), reader);
+          return Effect.as(claimed(release), { reader, claimScope });
         }),
       );
       return Effect.flatMap(
         // A scheduler yield after taking the permit must not precede its release finalizer.
         Effect.provideService(claim, Scheduler.PreventSchedulerYield, true),
-        (reader) =>
+        ({ reader, claimScope }) =>
           Effect.flatMap(
-            Effect.provideService(reader.acquire, ReadOnly, restore),
+            Scope.provide(Effect.provideService(reader.acquire, ReadOnly, restore), claimScope),
             (readerConnection) =>
               readerConnection === undefined
                 ? writer
