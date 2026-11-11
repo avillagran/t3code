@@ -109,7 +109,7 @@ type ThreadProjection = EnvironmentThread["projection"];
 type ThreadStructureRow = ThreadStructure["visibleTurnItems"][number];
 
 export const LAST_INVOKED_SCRIPT_BY_PROJECT_KEY = "t3code:last-invoked-script-by-project";
-export const MAX_HIDDEN_MOUNTED_TERMINAL_THREADS = 10;
+export const MAX_HIDDEN_MOUNTED_TERMINAL_THREADS = 2;
 
 export const ENVIRONMENT_RECONNECT_WARNING_GRACE_MS = 2_000;
 
@@ -332,7 +332,7 @@ export type HeldThreadTimeline<T extends readonly unknown[]> = {
   entries: T;
 };
 
-const MAX_REMEMBERED_THREAD_TIMELINES = 16;
+const MAX_REMEMBERED_THREAD_TIMELINES = 4;
 
 let rememberedThreadTimelines = new Map<string, HeldThreadTimeline<readonly unknown[]>>();
 let rememberedThreadTimelineOrder: string[] = [];
