@@ -557,7 +557,9 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
     return {
       executablePath: process.execPath,
       // Packaged builds have a separate cache; --require prevents cache settings leaking to provider subprocesses.
+      // Argv flags, unlike NODE_OPTIONS, stay out of provider subprocesses; worker threads share them.
       args: [
+        "--max-semi-space-size=8",
         ...(environment.isPackaged ? ["--require", environment.compileCachePath] : []),
         environment.backendEntryPath,
         "--bootstrap-fd",
