@@ -30,6 +30,11 @@ import { flushSync } from "react-dom";
 import { isElectron } from "../../env";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useResizeDrag } from "../../hooks/useResizeDrag";
+import {
+  updateClientSettings,
+  useClientSettings,
+  useClientSettingsHydrated,
+} from "../../hooks/useSettings";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { cn } from "../../lib/utils";
 import { useProjects, useVisibleThreadShells } from "../../state/entities";
@@ -550,6 +555,17 @@ export function TaskBoardPage() {
     null,
     SavedLayoutSchema,
   );
+  const mirror = JSON.stringify({
+    columns: resolveBoardLayout(savedLayout).columns,
+    collapsed: resolveBoardLayout(savedLayout).collapsed,
+  });
+  const mirrored = useClientSettings((settings) => JSON.stringify(settings.taskBoardLayout));
+  const settingsHydrated = useClientSettingsHydrated();
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- copies the arrangement to client settings, where tools outside the app read it
+  useEffect(() => {
+    if (!settingsHydrated || mirror === mirrored) return;
+    void updateClientSettings({ taskBoardLayout: JSON.parse(mirror) });
+  }, [mirror, mirrored, settingsHydrated]);
   const [renamingKey, setRenamingKey] = useState<string | null>(null);
   const updateThreadMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
