@@ -121,6 +121,8 @@ export class DesktopBrowserHost extends Context.Service<
       readonly active: boolean;
     }>;
     readonly agentTurnActive: (threadId: string) => boolean;
+    /** True while a thread with a running agent turn has a tab attached. */
+    readonly agentUsingTab: () => boolean;
     /** Threads whose agent turn started or ended. */
     readonly agentTurnChanges: Stream.Stream<string>;
   }
@@ -702,6 +704,7 @@ export const make = Effect.gen(function* () {
     pointers: Stream.fromPubSub(pointers),
     painting: Stream.fromPubSub(painting),
     agentTurnActive: (threadId) => agentTurns.has(threadId),
+    agentUsingTab: () => [...tabs.values()].some((tab) => agentTurns.has(tab.key.threadId)),
     agentTurnChanges: Stream.fromPubSub(agentTurnChanges),
     // Subscribes before announcing, so no attach falls between the two.
     events: Stream.unwrap(
