@@ -294,8 +294,8 @@ export const make = DesktopLifecycle.of({
         }).pipe(Effect.withSpan("desktop.lifecycle.activate")),
       );
     });
-    // SIGUSR2 drops the windows to free their renderers; the server and agents keep running, and
-    // launching the app again recreates the main window. A window closed by hand still quits.
+    // On Linux the app outlives its windows: closing them, or SIGUSR2, frees their renderers while
+    // the server and agents keep running, and launching the app again recreates the main window.
     let windowless = false;
     yield* electronApp.on("browser-window-created", () => {
       windowless = false;
@@ -318,9 +318,12 @@ export const make = DesktopLifecycle.of({
         Effect.gen(function* () {
           const app = yield* ElectronApp.ElectronApp;
           const state = yield* DesktopState.DesktopState;
-          if (environment.platform !== "darwin" && !(yield* Ref.get(state.quitting))) {
-            yield* app.quit;
+          if (environment.platform === "darwin" || (yield* Ref.get(state.quitting))) return;
+          if (environment.platform === "linux") {
+            windowless = true;
+            return;
           }
+          yield* app.quit;
         }).pipe(Effect.withSpan("desktop.lifecycle.windowAllClosed")),
       );
     });

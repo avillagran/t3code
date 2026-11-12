@@ -166,7 +166,7 @@ describe("DesktopLifecycle", () => {
     },
   );
 
-  it.effect("SIGUSR2 drops the windows without quitting, and another launch recreates one", () =>
+  it.effect("on Linux the app outlives its windows, and another launch recreates one", () =>
     Effect.gen(function* () {
       const appListeners = new Map<string, (...args: readonly unknown[]) => void>();
       const destroyed = yield* Deferred.make<void>();
@@ -204,9 +204,13 @@ describe("DesktopLifecycle", () => {
           appListeners.get("second-instance")?.();
           yield* Deferred.await(activated);
 
+          // A window closed by hand keeps the app running too.
           appListeners.get("browser-window-created")?.();
           appListeners.get("window-all-closed")?.();
-          yield* Deferred.await(quitRequested);
+          yield* Effect.yieldNow;
+          assert.isFalse(yield* Deferred.isDone(quitRequested));
+          appListeners.get("second-instance")?.();
+          assert.isFalse(yield* Deferred.isDone(quitRequested));
         }),
       ).pipe(Effect.provide(layer));
     }),
