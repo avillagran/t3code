@@ -690,6 +690,7 @@ describe("PreviewManager", () => {
                 agentLedPage: () => false,
                 placeDownload: () => true,
                 agentTurnActive: () => false,
+                agentUsingTab: () => false,
               }),
               Layer.mock(PreviewPasskeys.PreviewPasskeys)({
                 bridgeEnabled: false,

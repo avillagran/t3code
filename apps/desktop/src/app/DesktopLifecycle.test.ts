@@ -166,6 +166,52 @@ describe("DesktopLifecycle", () => {
     },
   );
 
+  it.effect("SIGUSR2 drops the windows without quitting, and another launch recreates one", () =>
+    Effect.gen(function* () {
+      const appListeners = new Map<string, (...args: readonly unknown[]) => void>();
+      const destroyed = yield* Deferred.make<void>();
+      const activated = yield* Deferred.make<void>();
+      const quitRequested = yield* Deferred.make<void>();
+      const layerEnvironment = Layer.succeed(DesktopEnvironment.DesktopEnvironment, {
+        platform: "linux",
+        isDevelopment: false,
+      } as DesktopEnvironment.DesktopEnvironment["Service"]);
+      const layer = DesktopLifecycle.layer.pipe(
+        Layer.provideMerge(
+          layerElectronApp(appListeners, Deferred.succeed(quitRequested, undefined)),
+        ),
+        Layer.provideMerge(layerElectronTheme),
+        Layer.provideMerge(layerElectronWindow(Deferred.succeed(destroyed, undefined))),
+        Layer.provideMerge(
+          layerDesktopWindow({ activate: Deferred.succeed(activated, undefined) }),
+        ),
+        Layer.provideMerge(layerEnvironment),
+        Layer.provideMerge(DesktopShutdown.layer),
+        Layer.provideMerge(DesktopState.layer),
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const lifecycle = yield* DesktopLifecycle.DesktopLifecycle;
+          yield* lifecycle.register;
+
+          process.emit("SIGUSR2");
+          yield* Deferred.await(destroyed);
+          appListeners.get("window-all-closed")?.();
+          assert.isFalse(yield* Deferred.isDone(quitRequested));
+
+          // Launching the app again brings a window back.
+          appListeners.get("second-instance")?.();
+          yield* Deferred.await(activated);
+
+          appListeners.get("browser-window-created")?.();
+          appListeners.get("window-all-closed")?.();
+          yield* Deferred.await(quitRequested);
+        }),
+      ).pipe(Effect.provide(layer));
+    }),
+  );
+
   it.effect("destroys windows before waiting for backend shutdown", () =>
     Effect.gen(function* () {
       const appListeners = new Map<string, (...args: readonly unknown[]) => void>();

@@ -22,6 +22,7 @@ import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopState from "./DesktopState.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
+import * as DesktopBrowserHost from "../preview/DesktopBrowserHost.ts";
 
 export class DesktopLifecycleRelaunchError extends Schema.TaggedError<DesktopLifecycleRelaunchError>()(
   "DesktopLifecycleRelaunchError",
@@ -293,7 +294,26 @@ export const make = DesktopLifecycle.of({
         }).pipe(Effect.withSpan("desktop.lifecycle.activate")),
       );
     });
+    // SIGUSR2 drops the windows to free their renderers; the server and agents keep running, and
+    // launching the app again recreates the main window. A window closed by hand still quits.
+    let windowless = false;
+    yield* electronApp.on("browser-window-created", () => {
+      windowless = false;
+    });
+    // Another launch only reveals an existing window, so the dropped one is recreated here.
+    yield* electronApp.on("second-instance", () => {
+      if (!windowless) return;
+      void runEffect(
+        desktopWindow.activate.pipe(
+          Effect.catchCause((cause) =>
+            logLifecycleError("failed to recreate the main window", { cause }),
+          ),
+          Effect.withSpan("desktop.lifecycle.recreateWindow"),
+        ),
+      );
+    });
     yield* electronApp.on("window-all-closed", () => {
+      if (windowless) return;
       void runEffect(
         Effect.gen(function* () {
           const app = yield* ElectronApp.ElectronApp;
@@ -339,6 +359,20 @@ export const make = DesktopLifecycle.of({
       });
       yield* addScopedListener(process, "SIGTERM", () => {
         quitFromSignal("SIGTERM", runEffect, quit);
+      });
+      yield* addScopedListener(process, "SIGUSR2", () => {
+        void runEffect(
+          Effect.gen(function* () {
+            const state = yield* DesktopState.DesktopState;
+            // Read from the app's context so the lifecycle does not require the browser host.
+            const browserHost = yield* Effect.serviceOption(DesktopBrowserHost.DesktopBrowserHost);
+            // An agent mid-turn would lose the browser tab it is driving.
+            const agentUsingTab = Option.isSome(browserHost) && browserHost.value.agentUsingTab();
+            if ((yield* Ref.get(state.quitting)) || agentUsingTab) return;
+            windowless = true;
+            yield* electronWindow.destroyAll;
+          }).pipe(Effect.withSpan("desktop.lifecycle.releaseWindows")),
+        );
       });
     }
 
