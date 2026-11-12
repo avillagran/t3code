@@ -415,6 +415,13 @@ export const VoiceTranscriptionDestination = Schema.Union([
 ]);
 export type VoiceTranscriptionDestination = typeof VoiceTranscriptionDestination.Type;
 
+// A copy of the task board's arrangement for tools outside the app, which cannot read the
+// browser storage that owns it.
+export const TaskBoardLayoutMirror = Schema.Struct({
+  columns: Schema.Array(Schema.Array(Schema.String)),
+  collapsed: Schema.Array(Schema.String),
+});
+
 export const ClientSettingsSchema = Schema.Struct({
   notificationMode: NotificationMode.pipe(
     Schema.withDecodingDefault(Effect.succeed("off" as const)),
@@ -612,6 +619,9 @@ export const ClientSettingsSchema = Schema.Struct({
   // Opt-in TeX typesetting in rendered Markdown. Off keeps math parsing and
   // KaTeX out of the render path entirely.
   mathRenderingEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  taskBoardLayout: Schema.NullOr(TaskBoardLayoutMirror).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
 });
 export type ClientSettings = typeof ClientSettingsSchema.Type;
 
@@ -2138,5 +2148,6 @@ export const ClientSettingsPatch = Schema.Struct({
   snapShotAnimations: Schema.optionalKey(Schema.Boolean),
   wordWrap: Schema.optionalKey(Schema.Boolean),
   mathRenderingEnabled: Schema.optionalKey(Schema.Boolean),
+  taskBoardLayout: Schema.optionalKey(Schema.NullOr(TaskBoardLayoutMirror)),
 });
 export type ClientSettingsPatch = typeof ClientSettingsPatch.Type;
