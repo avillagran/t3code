@@ -2721,9 +2721,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         if (!api) return;
         const threadKey = scopedThreadKey(threadRef);
         const selectionState = useThreadSelectionStore.getState();
-        // Search results are not selectable rows, so they always act on their own thread.
+        // Search results and other surfaces act on their own thread, not the sidebar selection.
         if (
           !fromSearch &&
+          options === undefined &&
           selectionState.hasSelection() &&
           selectionState.selectedThreadKeys.has(threadKey)
         ) {
