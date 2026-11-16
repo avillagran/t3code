@@ -567,15 +567,17 @@ function useSidebarThreads(input: {
               : EMPTY_THREADS,
           };
         });
+  const settledShelfFixed = useClientSettings((s) => s.sidebarSettledShelfFixed);
   const orderedThreads = [
     ...pinnedThreads,
     ...(projectFolders === null
       ? activeThreads
       : projectFolders.flatMap((folder) => folder.threads)),
-    ...renderedSettledThreads,
+    ...(settledShelfFixed ? [] : renderedSettledThreads),
     ...visibleInputThreads,
     ...visibleWorkingThreads,
     ...visibleSnoozedThreads,
+    ...(settledShelfFixed ? renderedSettledThreads : []),
   ];
   const sectionByThreadKey = new Map<string, SidebarSection>();
   for (const [list, section] of [
@@ -592,6 +594,7 @@ function useSidebarThreads(input: {
     ...partition,
     threads,
     workingShelfEnabled,
+    settledShelfFixed,
     searchableThreads: [
       ...pinnedThreads,
       ...activeThreads,
@@ -1330,6 +1333,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
 
   const {
     workingShelfEnabled,
+    settledShelfFixed,
     pinnedThreads,
     draggableThreadKeys,
     activeReorderableThreadKeys,
@@ -2002,9 +2006,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     const activeRows = rowsOf(activeThreads, "active");
     items.push({ kind: "marker", marker: "active-placeholder" });
     items.push(...activeRows);
-    items.push({ kind: "marker", marker: "settled-header" });
-    items.push({ kind: "marker", marker: "settled-placeholder" });
-    items.push(...rowsOf(renderedSettledThreads, "settled"));
+    const settledItems: SidebarListItem[] = [
+      { kind: "marker", marker: "settled-header" },
+      { kind: "marker", marker: "settled-placeholder" },
+      ...rowsOf(renderedSettledThreads, "settled"),
+    ];
+    if (!settledShelfFixed) items.push(...settledItems);
     if (inputThreads.length > 0) {
       items.push({ kind: "marker", marker: "input-header" });
       items.push(...rowsOf(visibleInputThreads, "input"));
@@ -2017,6 +2024,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       items.push({ kind: "marker", marker: "snoozed-header" });
       items.push(...rowsOf(visibleSnoozedThreads, "snoozed"));
     }
+    if (settledShelfFixed) items.push(...settledItems);
     return items;
   })();
   // Preserve the list while streamed updates leave order unchanged to retain row memoization.
@@ -2099,6 +2107,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     ...(draggedActiveOrder === undefined ? {} : { activeOrder: draggedActiveOrder }),
     settledExpanded: settledShelfExpanded,
     independentShelves: true,
+    settledInMainList: !settledShelfFixed,
     settledVisibleCount,
     routeThreadKey: routeRowThreadKey,
     snoozedThreadCount: snoozedThreads.length,
@@ -3696,7 +3705,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     }
                     return (
                       <SidebarThreadSections
+                        key={settledShelfFixed ? "fixed-settled" : "scroll-settled"}
                         ref={attachTreeRef}
+                        settledFixed={settledShelfFixed}
                         main={main}
                         shelves={shelves}
                         sweeping={actionSweep !== null}
