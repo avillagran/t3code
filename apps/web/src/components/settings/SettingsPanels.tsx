@@ -550,6 +550,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.chatUsageStripEnabled !== DEFAULT_UNIFIED_SETTINGS.chatUsageStripEnabled
       ? ["Usage strip"]
       : []),
+    ...(settings.sidebarSettledShelfFixed !== DEFAULT_UNIFIED_SETTINGS.sidebarSettledShelfFixed
+      ? [gt("Keep Settled at bottom")]
+      : []),
     ...(settings.sidebarAutoSettleAfterDays !== DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays
       ? [gt("Auto-settle inactive threads")]
       : []),
@@ -743,6 +746,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarProjectSortOrder: DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder,
       sidebarWorkingShelfEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled,
       chatUsageStripEnabled: DEFAULT_UNIFIED_SETTINGS.chatUsageStripEnabled,
+      sidebarSettledShelfFixed: DEFAULT_UNIFIED_SETTINGS.sidebarSettledShelfFixed,
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
       sidebarAutoSettleKeepPullRequests: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests,
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
@@ -1016,6 +1020,34 @@ export function GeneralSettingsPanel() {
                 updateSettings({ chatUsageStripEnabled: Boolean(checked) })
               }
               aria-label={gt("Usage strip")}
+            />
+          }
+        />
+        <SettingsRow
+          {...setting("fixed-settled-shelf")}
+          description={
+            <T>Keep Settled below Working and Snoozed instead of at the end of the main list.</T>
+          }
+          resetAction={
+            settings.sidebarSettledShelfFixed !==
+            DEFAULT_UNIFIED_SETTINGS.sidebarSettledShelfFixed ? (
+              <SettingResetButton
+                ariaLabel={gt("Reset settled section position to default")}
+                onClick={() =>
+                  updateSettings({
+                    sidebarSettledShelfFixed: DEFAULT_UNIFIED_SETTINGS.sidebarSettledShelfFixed,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.sidebarSettledShelfFixed}
+              onCheckedChange={(checked) =>
+                updateSettings({ sidebarSettledShelfFixed: Boolean(checked) })
+              }
+              aria-label={gt("Keep Settled at bottom")}
             />
           }
         />

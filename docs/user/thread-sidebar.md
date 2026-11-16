@@ -33,7 +33,7 @@ Threads don't require a project. Pick **No project** (or press `mod+alt+n` on we
 
 Enabled by default (**Settings → General → Working section**, per device). Unpinned threads that are actively running—or waiting on subagents, watched PRs, or monitors—collapse into a **Working** section below Active, and return to Active when they finish or fail.
 
-On web and desktop, threads that need an answer, an approval, or a plan review move into **Input**, above Working. Both sections stay available while you scroll the active list, and **Settled** sits at the end of that list. On native mobile, requests return to the active list.
+On web and desktop, threads that need an answer, an approval, or a plan review move into **Input**, above Working. Both sections stay available while you scroll the active list, and **Settled** sits at the end of that list. Enable **Settings → General → Keep Settled at bottom** to keep it visible below Working and Snoozed instead (per device). On native mobile, requests return to the active list.
 
 While enabled, Active is sorted by most recent return (manual reordering is paused until you turn it off).
 

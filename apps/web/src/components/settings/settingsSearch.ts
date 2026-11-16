@@ -518,6 +518,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("provider usage limits quota bars 5h weekly reset header chat")],
   },
   {
+    id: "fixed-settled-shelf",
+    title: msg("Keep Settled at bottom"),
+    to: "/settings/general",
+    searchTerms: [msg("sidebar settled section fixed working below end scroll list")],
+  },
+  {
     id: "boring-sidebar",
     title: msg("Boring sidebar (group by project)"),
     to: "/settings/labs",
