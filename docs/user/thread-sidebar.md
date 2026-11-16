@@ -31,13 +31,15 @@ Threads don't require a project. Pick **No project** (or press `mod+alt+n` on we
 
 ### Working section (beta)
 
-Enabled by default (**Settings → General → Working section**, per device). Unpinned threads that are actively running—or waiting on subagents, watched PRs, or monitors—collapse into a **Working** section below Active, and return to the top of Active when they finish, fail, or need input.
+Enabled by default (**Settings → General → Working section**, per device). Unpinned threads that are actively running—or waiting on subagents, watched PRs, or monitors—collapse into a **Working** section below Active, and return to Active when they finish or fail.
+
+On web and desktop, threads that need an answer, an approval, or a plan review move into **Input**, above Working. Both sections stay available while you scroll the active list, and **Settled** sits at the end of that list. On native mobile, requests return to the active list.
 
 While enabled, Active is sorted by most recent return (manual reordering is paused until you turn it off).
 
 ### Group threads by project (beta)
 
-Enable **Settings → Labs → Boring sidebar (group by project)** on web/desktop (per device) to group active threads into collapsible project folders. Pinned threads stay above; Snoozed and Settled stay below. In this mode, the Working section and sidebar drag-reordering are disabled (dragging a thread onto the composer still works).
+Enable **Settings → Labs → Boring sidebar (group by project)** on web/desktop (per device) to group active threads into collapsible project folders. Pinned threads stay above; Snoozed and Settled stay below. In this mode, the Working and Input sections and sidebar drag-reordering are disabled (dragging a thread onto the composer still works).
 
 ## Settle, snooze, and archive
 
