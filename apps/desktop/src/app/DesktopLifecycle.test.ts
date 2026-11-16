@@ -175,6 +175,7 @@ describe("DesktopLifecycle", () => {
       const layerEnvironment = Layer.succeed(DesktopEnvironment.DesktopEnvironment, {
         platform: "linux",
         isDevelopment: false,
+        appImagePath: Option.none(),
       } as DesktopEnvironment.DesktopEnvironment["Service"]);
       const layer = DesktopLifecycle.layer.pipe(
         Layer.provideMerge(
