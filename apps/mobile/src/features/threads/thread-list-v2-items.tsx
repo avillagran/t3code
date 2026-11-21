@@ -325,6 +325,12 @@ type ThreadListV2ShelfHeaderProps = {
 };
 
 const SHELF_COPY = {
+  input: {
+    label: msg("Input", { $context: "thread list section" }),
+    count: msg("Input ({count})"),
+    collapse: msg("Collapses the input threads."),
+    expand: msg("Expands the input threads."),
+  },
   working: {
     label: msg("Working", { $context: "thread list section" }),
     count: msg("{count, plural, one {{count} working thread} other {{count} working threads}}"),
@@ -367,6 +373,12 @@ function ThreadListV2ShelfHeader(
     />
   );
 }
+
+export const ThreadListV2InputShelfHeader = memo(function ThreadListV2InputShelfHeader(
+  props: ThreadListV2ShelfHeaderProps,
+) {
+  return <ThreadListV2ShelfHeader {...props} kind="input" />;
+});
 
 export const ThreadListV2WorkingShelfHeader = memo(function ThreadListV2WorkingShelfHeader(
   props: ThreadListV2ShelfHeaderProps,
@@ -891,7 +903,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     props.snoozeWakeLabelText === undefined ? undefined : m(props.snoozeWakeLabelText);
   const rowAccessibilityLabel = threadListV2RowAccessibilityLabel(
     {
-      title: thread.title,
+      title: [thread.title, props.project?.title, props.environmentLabel]
+        .filter(Boolean)
+        .join(", "),
       variant,
       woke: showsWoke,
       // Working and waiting rows show only an icon and a duration, so name them for speech.
@@ -1515,9 +1529,23 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           >
             {thread.runtime.lastError}
           </Text>
-        ) : props.environmentLabel ? (
+        ) : props.project || props.environmentLabel ? (
           <View className="min-w-0 flex-1 flex-row items-center gap-1">
-            {props.environmentMachine ? (
+            {props.project ? (
+              <Text
+                className={cn(
+                  "shrink text-xs",
+                  selected
+                    ? selectedThreadRowColors.mutedForegroundClassName
+                    : rowAppearance.tertiaryForegroundClassName,
+                )}
+                numberOfLines={1}
+              >
+                {props.project.title}
+                {props.environmentLabel ? " ·" : ""}
+              </Text>
+            ) : null}
+            {props.environmentLabel && props.environmentMachine ? (
               <EnvironmentMachineSymbol
                 kind={props.environmentMachine}
                 size={machineIconSize}
