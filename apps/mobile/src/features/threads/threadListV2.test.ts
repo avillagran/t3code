@@ -1833,20 +1833,29 @@ describe("Working section beta", () => {
   const ids = (layout: ReturnType<typeof buildThreadListV2Items>) =>
     layout.items.map((item) => item.thread.id);
 
-  it("folds unpinned working threads into a collapsed shelf", () => {
-    const layout = build();
-    expect(ids(layout)).toEqual([
+  it("folds Input before Working, leaving an open thread hidden when its group collapses", () => {
+    const layout = build({ selectedThreadKey: `${threads[3]!.environmentId}:asks-approval` });
+    expect(ids(layout)).toEqual(["pinned-working", "finished-late", "finished-early"]);
+    expect(layout.inputCount).toBe(1);
+    expect(layout.workingCount).toBe(1);
+    expect(layout.inputShelfHeaderIndex).toBe(3);
+    expect(layout.workingShelfHeaderIndex).toBe(3);
+    const expanded = build({ inputShelfExpanded: true, workingShelfExpanded: true });
+    expect(ids(expanded)).toEqual([
       "pinned-working",
       "finished-late",
-      "asks-approval",
       "finished-early",
+      "asks-approval",
+      "working",
     ]);
-    expect(layout.workingCount).toBe(1);
-    expect(layout.workingShelfHeaderIndex).toBe(4);
+    expect(expanded.inputShelfHeaderIndex).toBe(3);
+    expect(expanded.workingShelfHeaderIndex).toBe(4);
 
     const off = build({ workingShelfEnabled: false });
     expect(ids(off)).toContain("working");
     expect(off.workingCount).toBe(0);
+    expect(off.inputCount).toBe(0);
+    expect(ids(off)).toContain("asks-approval");
   });
 
   it("preserves pins and Working membership across connection loss and recovery", () => {
@@ -1896,7 +1905,7 @@ describe("Working section beta", () => {
       inboxReturnAt: (thread) =>
         thread.id === "finished-early" ? Date.parse("2026-06-01T04:00:00.000Z") : undefined,
     });
-    expect(ids(layout).slice(1)).toEqual(["finished-early", "finished-late", "asks-approval"]);
+    expect(ids(layout).slice(1)).toEqual(["finished-early", "finished-late"]);
   });
 
   it("places the shelf after queued tasks and before snoozed and settled threads", () => {

@@ -33,6 +33,15 @@ export function useThreadListV2ShelfPreferences() {
       }),
     });
   };
+  const toggleInputShelf = () => {
+    if (!loaded) return;
+    void savePreferences({
+      transform: (current) => ({
+        threadListInputShelfExpanded: current.threadListInputShelfExpanded !== true,
+      }),
+    });
+  };
+
   const toggleWorkingShelf = () => {
     if (!loaded) return;
     void savePreferences({
@@ -44,6 +53,8 @@ export function useThreadListV2ShelfPreferences() {
 
   return {
     loaded,
+    inputShelfExpanded: loaded && preferencesResult.value.threadListInputShelfExpanded === true,
+    toggleInputShelf,
     settledShelfExpanded,
     snoozedShelfExpanded,
     workingShelfEnabled,
