@@ -778,7 +778,7 @@ describe("DesktopBackendManager", () => {
 
       const migratingStatus = yield* Ref.make(503);
       const migrated = yield* Deferred.make<void>();
-      yield* startInstance(
+      const migrating = yield* startInstance(
         migratingStatus,
         Deferred.succeed(migrated, undefined).pipe(Effect.asVoid),
         // Enough progress lines that the start line scrolls out of the output tail.
@@ -791,9 +791,11 @@ describe("DesktopBackendManager", () => {
       );
       yield* TestClock.adjust(Duration.minutes(10));
       assert.isTrue(Option.isNone(yield* Queue.poll(reports)));
+      assert.deepEqual(yield* migrating.databaseMigrationProgress, { step: 80, total: 80 });
       yield* Ref.set(migratingStatus, 200);
       yield* TestClock.adjust(Duration.millis(100));
       yield* Deferred.await(migrated);
+      assert.isNull(yield* migrating.databaseMigrationProgress);
 
       yield* startInstance(
         yield* Ref.make(503),
