@@ -1,3 +1,4 @@
+import { TaskBoardEntry } from "../board/TaskBoardEntry";
 import { useGT, useMessages } from "gt-react-native";
 import { useActiveNewTask } from "../../state/active-new-task";
 import { ThreadUndoNotice } from "../home/ThreadUndoNotice";
@@ -642,6 +643,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
                 scrollEventThrottle={16}
                 showsVerticalScrollIndicator={false}
                 style={styles.threadList}
+                ListHeaderComponent={props.searchQuery.trim() ? undefined : <TaskBoardEntry />}
                 ListEmptyComponent={listEmpty}
               />
             </GestureDetector>
@@ -667,7 +669,10 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
         }}
       >
         {listItems.length === 0 ? (
-          <View className="flex-1 items-center justify-center">{listEmpty}</View>
+          <View className="flex-1 items-center justify-center">
+            {listEmpty}
+            {props.searchQuery.trim() ? null : <TaskBoardEntry />}
+          </View>
         ) : (
           <SwipeableScrollGateProvider enabled={swipeEnabled}>
             <GestureDetector gesture={sidebarScrollGesture}>
@@ -695,6 +700,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
                 scrollEventThrottle={16}
                 showsVerticalScrollIndicator={false}
                 style={styles.threadList}
+                ListHeaderComponent={props.searchQuery.trim() ? undefined : <TaskBoardEntry />}
                 ListEmptyComponent={listEmpty}
               />
             </GestureDetector>

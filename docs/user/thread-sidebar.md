@@ -150,6 +150,11 @@ choice.
 While this is on, the active list is ordered by when each thread last came back to you, so you
 cannot drag or move threads within it. Your saved order returns when you turn it off.
 
+### Task Board on mobile
+
+Open **Task Board** from the thread list on iOS or Android. Swipe the row of status tabs to find
+the group you want, then tap a thread to open the conversation.
+
 ### Group threads by project (beta)
 
 Turn on **Settings → Labs → Boring sidebar (group by project)** on web and desktop to put active

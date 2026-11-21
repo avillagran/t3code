@@ -1,3 +1,4 @@
+import { TaskBoardEntry } from "../board/TaskBoardEntry";
 import { useGT, useMessages } from "gt-react-native";
 
 import { useContentTopInset } from "../../components/ui/useBarInset";
@@ -683,6 +684,7 @@ export function HomeScreen(props: HomeScreenProps) {
   const v2ListHeader = (
     <>
       {listHeader}
+      {hasSearchQuery ? null : <TaskBoardEntry />}
       {Platform.OS === "ios" && workspace ? (
         <ThreadListFilters
           gutter={sidebarSurface ? 8 : 0}
@@ -756,6 +758,7 @@ export function HomeScreen(props: HomeScreenProps) {
           style={{ paddingBottom: insets.bottom }}
         >
           {v2ListEmpty}
+          {hasSearchQuery ? null : <TaskBoardEntry />}
         </View>
       </ScreenContent>
     );
