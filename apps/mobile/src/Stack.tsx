@@ -48,6 +48,7 @@ import {
   RenderFailureView,
   type RenderFailureProps,
 } from "./components/RenderErrorBoundary";
+import { TaskBoardRouteScreen } from "./features/board/TaskBoardRouteScreen";
 import { ArchivedThreadsRouteScreen } from "./features/archive/ArchivedThreadsRouteScreen";
 import { ConnectOnboardingRouteScreen } from "./features/cloud/ConnectOnboardingRouteScreen";
 import { AttachmentFileScreen } from "./features/files/AttachmentFileScreen";
@@ -653,6 +654,11 @@ const RootStackConfig = createWorkspaceStackNavigator({
     IssueFilterSearch: createNativeStackScreen({
       screen: IssueFilterSearchScreen,
       options: SEARCH_SHEET_ROUTE,
+    }),
+    TaskBoard: createNativeStackScreen({
+      screen: TaskBoardRouteScreen,
+      linking: "task-board",
+      options: pageRoute({ duoMinimize: "never" }),
     }),
     Thread: createNativeStackScreen({
       screen: ThreadRouteScreen,

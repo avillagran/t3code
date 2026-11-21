@@ -37,6 +37,11 @@ Threads that need an answer, an approval, or a plan review move into **Input**, 
 
 While enabled, Active is sorted by most recent return (manual reordering is paused until you turn it off).
 
+### Task Board on mobile
+
+Open **Task Board** from the thread list on iOS or Android. Swipe the row of status tabs to find
+the group you want, then tap a thread to open the conversation.
+
 ### Group threads by project (beta)
 
 Enable **Settings → Labs → Boring sidebar (group by project)** on web/desktop (per device) to group active threads into collapsible project folders. Pinned threads stay above; Snoozed and Settled stay below. In this mode, the Working and Input sections and sidebar drag-reordering are disabled (dragging a thread onto the composer still works).
