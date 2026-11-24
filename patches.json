@@ -27,7 +27,8 @@
       "base": "sidebar-shelves"
     },
     {
-      "name": "mobile-task-board"
+      "name": "mobile-task-board",
+      "base": "mobile-sidebar"
     }
   ]
 }
