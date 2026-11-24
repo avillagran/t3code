@@ -6,12 +6,9 @@ import {
   type ThreadSnoozeShell,
 } from "@t3tools/client-runtime/state/thread-settled";
 
+import { isListedThreadLineage } from "@t3tools/contracts";
 import type { SidebarThreadSummary } from "../../types";
-import {
-  isSidebarHiddenThread,
-  resolveSidebarRowStatus,
-  type SidebarThreadStatus,
-} from "../Sidebar.logic";
+import { resolveSidebarRowStatus, type SidebarThreadStatus } from "../Sidebar.logic";
 
 export type BoardPanelId =
   | "attention"
@@ -98,7 +95,7 @@ export function groupThreadsByPanel<T extends BoardThread>(
     settled: [],
   };
   for (const thread of threads) {
-    if (thread.archivedAt !== null || isSidebarHiddenThread(thread)) continue;
+    if (thread.archivedAt !== null || !isListedThreadLineage(thread.lineage)) continue;
     groups[resolveBoardPanel(thread, now)].push(thread);
   }
   for (const panel of BOARD_PANELS) groups[panel.id].sort(compareBoardThreads);
