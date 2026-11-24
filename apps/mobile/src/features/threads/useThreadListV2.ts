@@ -10,6 +10,7 @@ import {
   buildThreadListV2Items,
   buildThreadListV2ListItems,
   getThreadListV2OrderedSection,
+  splitThreadListV2DockedShelves,
   threadListInboxReturns,
   threadListV2LayoutTime,
 } from "./threadListV2";
@@ -66,6 +67,8 @@ export function useThreadListV2(input: {
   readonly workingShelfExpanded: boolean;
   readonly snoozedShelfExpanded: boolean;
   readonly settledShelfExpanded: boolean;
+  /** Docks Settled below the other shelves instead of ending the active list with it. */
+  readonly settledShelfDocked: boolean;
   readonly selectedThreadKey: string | null;
 }) {
   const { threads, workingShelfEnabled } = input;
@@ -251,7 +254,18 @@ export function useThreadListV2(input: {
       input.shelfPreferencesLoaded,
     ],
   );
-  return { layout, items, contentOnlyThreadKeys, olderSettledShelf };
+  const docked = useMemo(
+    () => splitThreadListV2DockedShelves(items, { dockSettled: input.settledShelfDocked }),
+    [items, input.settledShelfDocked],
+  );
+  return {
+    layout,
+    items,
+    activeItems: docked.active,
+    dockedShelves: docked.shelves,
+    contentOnlyThreadKeys,
+    olderSettledShelf,
+  };
 }
 
 /** The list's scope per environment: its projects there, or every project. */

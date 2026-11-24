@@ -56,6 +56,7 @@ export function useThreadListV2ShelfPreferences() {
     inputShelfExpanded: loaded && preferencesResult.value.threadListInputShelfExpanded === true,
     toggleInputShelf,
     settledShelfExpanded,
+    settledShelfDocked: loaded && preferencesResult.value.threadListSettledShelfDocked === true,
     snoozedShelfExpanded,
     workingShelfEnabled,
     workingShelfExpanded,

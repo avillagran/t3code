@@ -43,6 +43,7 @@ import {
   resolveThreadListV2RowStatus,
   resolveThreadListV2Status,
   resolveThreadListV2WokeAt,
+  splitThreadListV2DockedShelves,
   threadListV2ListItemsAreEqual,
   threadListV2RowAccessibilityLabel,
   threadListV2ShowMoreAccessibilityLabel,
@@ -1946,15 +1947,15 @@ describe("Working section beta", () => {
       settledCount: layout.settledCount,
       settledShelfHeaderIndex: layout.settledShelfHeaderIndex,
     });
-    expect(
-      items.map((item) =>
+    const labels = (list: ReadonlyArray<ThreadListV2ListItem>) =>
+      list.map((item) =>
         item.type === "v2-thread"
           ? item.item.thread.id
           : item.type === "v2-pending"
             ? item.pendingTask.title
             : item.type,
-      ),
-    ).toEqual([
+      );
+    expect(labels(items)).toEqual([
       "queued",
       "active",
       "v2-working-shelf",
@@ -1963,6 +1964,20 @@ describe("Working section beta", () => {
       "snoozed",
       "v2-settled-shelf",
       "settled",
+    ]);
+
+    const scrolling = splitThreadListV2DockedShelves(items, { dockSettled: false });
+    expect(labels(scrolling.active)).toEqual(["queued", "active", "v2-settled-shelf", "settled"]);
+    expect(scrolling.shelves.map((shelf) => [shelf.header.type, ...labels(shelf.rows)])).toEqual([
+      ["v2-working-shelf", "working"],
+      ["v2-snoozed-shelf", "snoozed"],
+    ]);
+    const docked = splitThreadListV2DockedShelves(items, { dockSettled: true });
+    expect(labels(docked.active)).toEqual(["queued", "active"]);
+    expect(docked.shelves.map((shelf) => [shelf.header.type, ...labels(shelf.rows)])).toEqual([
+      ["v2-working-shelf", "working"],
+      ["v2-snoozed-shelf", "snoozed"],
+      ["v2-settled-shelf", "settled"],
     ]);
   });
 });

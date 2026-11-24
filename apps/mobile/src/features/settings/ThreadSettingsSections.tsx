@@ -218,6 +218,8 @@ export function WorkingSectionSettings() {
   const preferences = useAtomValue(mobilePreferencesAtom);
   const workingShelfEnabled =
     AsyncResult.isSuccess(preferences) && preferences.value.workingShelfEnabled !== false;
+  const settledShelfDocked =
+    AsyncResult.isSuccess(preferences) && preferences.value.threadListSettledShelfDocked === true;
 
   return (
     <View className="gap-3">
@@ -228,6 +230,17 @@ export function WorkingSectionSettings() {
           value={workingShelfEnabled}
           onValueChange={(value) => {
             void savePreferences({ workingShelfEnabled: value });
+          }}
+        />
+        <SettingsSwitchRow
+          icon="checkmark.circle"
+          label={gt("Keep Settled at bottom")}
+          subtitle={gt(
+            "Keep Settled below Working and Snoozed instead of at the end of the main list.",
+          )}
+          value={settledShelfDocked}
+          onValueChange={(value) => {
+            void savePreferences({ threadListSettledShelfDocked: value });
           }}
         />
       </SettingsSection>

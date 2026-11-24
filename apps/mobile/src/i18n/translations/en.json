@@ -3887,6 +3887,8 @@
   "5b8a01a439118ef3": "Apply auto-settle defaults",
   "d9b0fbd680d5f175": "Sidebar",
   "bdf39fd139a04325": "Working section",
+  "1320cf997145792f": "Keep Settled at bottom",
+  "9c0e0b45dd454115": "Keep Settled below Working and Snoozed instead of at the end of the main list.",
   "b0c77717b7d7b4a3": "New threads",
   "8c8cf0bc2721cb2c": "Use last project",
   "7d8bec2dc3f0e1a6": "Start new threads in the last project you used on this device.",

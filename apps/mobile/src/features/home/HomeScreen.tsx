@@ -91,6 +91,8 @@ import {
   type ThreadListV2ListItem,
 } from "../threads/threadListV2";
 import { useThreadListV2ShelfPreferences } from "../threads/use-thread-list-v2-shelf-preferences";
+import { ThreadListV2DockedShelves } from "../threads/ThreadListV2DockedShelves";
+import { useAndroidFloatingTabs } from "../settings/appearance/AppearancePreferencesProvider";
 import type { HomeListFilterMenuEnvironment } from "./home-list-filter-menu";
 import {
   buildHomeProjectScopes,
@@ -219,13 +221,15 @@ export function HomeScreen(props: HomeScreenProps) {
   const insets = useSafeAreaInsets();
   const contentTopInset = useContentTopInset();
   const emptyTopInset = useWorkspaceListEmptyTopInset();
-  const { fabClearance } = useAndroidControlSizing();
+  const { fabClearance, fabSize } = useAndroidControlSizing();
+  const floatingTabsEnabled = useAndroidFloatingTabs();
   const screenMetrics = useNativeLayoutMetrics();
   const contentSideInsets = usesNativeWorkspaceColumns
     ? (columnMetrics ?? screenMetrics)?.safeArea
     : undefined;
   // Wide Android lists need reading-width gutters to clear edges and camera cutouts.
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const [listRegionHeight, setListRegionHeight] = useState<number | null>(null);
   const androidListGutter =
     Platform.OS === "android"
       ? deriveCenteredContentHorizontalPadding({
@@ -392,6 +396,7 @@ export function HomeScreen(props: HomeScreenProps) {
   const {
     loaded: shelfPreferencesLoaded,
     settledShelfExpanded,
+    settledShelfDocked,
     snoozedShelfExpanded,
     workingShelfEnabled,
     workingShelfExpanded,
@@ -420,6 +425,8 @@ export function HomeScreen(props: HomeScreenProps) {
   const {
     layout: threadListV2Layout,
     items: threadListV2Items,
+    activeItems: activeThreadListV2Items,
+    dockedShelves,
     contentOnlyThreadKeys,
     olderSettledShelf,
   } = useThreadListV2({
@@ -443,6 +450,7 @@ export function HomeScreen(props: HomeScreenProps) {
     workingShelfExpanded,
     snoozedShelfExpanded,
     settledShelfExpanded,
+    settledShelfDocked,
     selectedThreadKey,
   });
   // Called as `props.onSelectThread(...)`, the compiler would cache this handler on the whole
@@ -463,10 +471,17 @@ export function HomeScreen(props: HomeScreenProps) {
   useThreadJumpShortcuts(threadListV2Items, selectThread, props.onSelectPendingTask);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads the list's visible range after commit to enable swipe gestures on those rows
   useEffect(() => {
-    if (swipeEnabled) activateVisibleRows(threadListV2Items);
-  }, [activateVisibleRows, swipeEnabled, threadListV2Items]);
+    if (swipeEnabled) activateVisibleRows(activeThreadListV2Items);
+  }, [activateVisibleRows, swipeEnabled, activeThreadListV2Items]);
 
-  const renderV2Item = ({ item }: { readonly item: ThreadListV2ListItem }) => {
+  // Docked shelf rows are always on screen, so they skip the viewport's swipe activation.
+  const renderV2Item = ({
+    item,
+    docked = false,
+  }: {
+    readonly item: ThreadListV2ListItem;
+    readonly docked?: boolean;
+  }) => {
     if (item.type === "v2-pending") {
       const pendingScopeKey = scopedProjectKey(
         item.pendingTask.environmentId,
@@ -498,7 +513,7 @@ export function HomeScreen(props: HomeScreenProps) {
           onSwipeableClose={handleSwipeableClose}
           onSwipeableWillOpen={handleSwipeableWillOpen}
           simultaneousSwipeGesture={homeScrollGesture}
-          activationKey={item.key}
+          activationKey={docked ? undefined : item.key}
         />
       );
     }
@@ -609,10 +624,11 @@ export function HomeScreen(props: HomeScreenProps) {
         onSwipeableClose={handleSwipeableClose}
         onSwipeableWillOpen={handleSwipeableWillOpen}
         simultaneousSwipeGesture={homeScrollGesture}
-        activationKey={item.key}
+        activationKey={docked ? undefined : item.key}
       />
     );
   };
+  const renderDockedV2Item = (item: ThreadListV2ListItem) => renderV2Item({ item, docked: true });
   const v2KeyExtractor = (item: ThreadListV2ListItem) => item.key;
 
   // extraData changes invalidate every visible row; put the minute clock on items to limit updates.
@@ -782,10 +798,44 @@ export function HomeScreen(props: HomeScreenProps) {
     );
   }
 
+  const showMoreSettledRow =
+    settledShelfExpanded && threadListV2Layout.hiddenSettledCount > 0 ? (
+      <ThreadListV2ShowMoreRow
+        hiddenCount={threadListV2Layout.hiddenSettledCount}
+        {...(olderSettledShelf.loading
+          ? { state: "loading" as const }
+          : olderSettledShelf.failed
+            ? { state: "failed" as const }
+            : {})}
+        onPress={() => {
+          olderSettledShelf.retry();
+          showMoreSettled();
+        }}
+      />
+    ) : null;
+  const listSidePadding = {
+    paddingLeft: (contentSideInsets?.left ?? 0) + (sidebarSurface ? 8 : 0) + androidListGutter,
+    paddingRight: (contentSideInsets?.right ?? 0) + (sidebarSurface ? 8 : 0) + androidListGutter,
+  };
+  const listBottomClearance =
+    Platform.OS === "ios"
+      ? iosBottomClearance
+      : (workspace?.bottomClearance ??
+        Math.max(insets.bottom, 16) + (Platform.OS === "android" ? fabClearance : 88));
+  // Docked shelves only need to clear the New thread button, not leave scroll room past it.
+  const dockBottomClearance =
+    Platform.OS === "android" && !floatingTabsEnabled
+      ? Math.min(listBottomClearance, insets.bottom + 16 + fabSize + 8)
+      : listBottomClearance;
+  const hasDockedShelves = dockedShelves.length > 0;
+
   return (
     <View className={containerClassName}>
       <ScreenContent surface="screen">
-        <View className={cn("flex-1", Platform.OS !== "android" && contentBackground)}>
+        <View
+          className={cn("flex-1", Platform.OS !== "android" && contentBackground)}
+          onLayout={(event) => setListRegionHeight(event.nativeEvent.layout.height)}
+        >
           <SwipeableScrollGateProvider enabled={swipeEnabled} activation={swipeRowActivation}>
             <GestureDetector gesture={homeScrollGesture}>
               <AnimatedLegendList
@@ -793,13 +843,13 @@ export function HomeScreen(props: HomeScreenProps) {
                 ref={listRef}
                 onLoad={() => {
                   settleLaunchSplashHomeRows();
-                  activateVisibleRows(threadListV2Items);
+                  activateVisibleRows(activeThreadListV2Items);
                 }}
                 onTouchStart={(event) => trackListTouches(event, true)}
                 onTouchEnd={(event) => trackListTouches(event, false)}
                 onTouchCancel={(event) => trackListTouches(event, false)}
                 renderScrollComponent={Platform.OS === "ios" ? renderHomeScrollView : undefined}
-                data={threadListV2Items}
+                data={activeThreadListV2Items}
                 renderItem={renderV2Item}
                 keyExtractor={v2KeyExtractor}
                 getItemType={(item) => item.type}
@@ -811,23 +861,8 @@ export function HomeScreen(props: HomeScreenProps) {
                 ListHeaderComponent={v2ListHeader}
                 // Lifted above the rows so an iOS filter menu's dismissal morph is not covered.
                 ListHeaderComponentStyle={{ zIndex: 1 }}
-                ListFooterComponent={
-                  settledShelfExpanded && threadListV2Layout.hiddenSettledCount > 0 ? (
-                    <ThreadListV2ShowMoreRow
-                      hiddenCount={threadListV2Layout.hiddenSettledCount}
-                      {...(olderSettledShelf.loading
-                        ? { state: "loading" as const }
-                        : olderSettledShelf.failed
-                          ? { state: "failed" as const }
-                          : {})}
-                      onPress={() => {
-                        olderSettledShelf.retry();
-                        showMoreSettled();
-                      }}
-                    />
-                  ) : null
-                }
-                ListEmptyComponent={v2ListEmpty}
+                ListFooterComponent={settledShelfDocked ? null : showMoreSettledRow}
+                ListEmptyComponent={hasDockedShelves ? null : v2ListEmpty}
                 style={{ flex: 1 }}
                 automaticallyAdjustsScrollIndicatorInsets={Platform.OS === "ios"}
                 contentInsetAdjustmentBehavior="never"
@@ -841,19 +876,19 @@ export function HomeScreen(props: HomeScreenProps) {
                 {...scrollGateHandlers}
                 scrollEventThrottle={16}
                 contentContainerStyle={{
-                  paddingLeft:
-                    (contentSideInsets?.left ?? 0) + (sidebarSurface ? 8 : 0) + androidListGutter,
-                  paddingRight:
-                    (contentSideInsets?.right ?? 0) + (sidebarSurface ? 8 : 0) + androidListGutter,
-                  paddingBottom:
-                    Platform.OS === "ios"
-                      ? iosBottomClearance
-                      : (workspace?.bottomClearance ??
-                        Math.max(insets.bottom, 16) +
-                          (Platform.OS === "android" ? fabClearance : 88)),
+                  ...listSidePadding,
+                  paddingBottom: hasDockedShelves ? 16 : listBottomClearance,
                 }}
               />
             </GestureDetector>
+            <ThreadListV2DockedShelves
+              shelves={dockedShelves}
+              renderItem={renderDockedV2Item}
+              settledFooter={showMoreSettledRow}
+              regionHeight={listRegionHeight ?? windowHeight}
+              pane={sidebarSurface ? "sidebar" : "screen"}
+              style={{ ...listSidePadding, paddingBottom: dockBottomClearance }}
+            />
           </SwipeableScrollGateProvider>
         </View>
       </ScreenContent>

@@ -725,6 +725,45 @@ export function buildThreadListV2ListItems(input: {
   });
 }
 
+export type ThreadListV2ShelfListItem =
+  | ThreadListV2InputShelfListItem
+  | ThreadListV2WorkingShelfListItem
+  | ThreadListV2SnoozedShelfListItem
+  | ThreadListV2SettledShelfListItem;
+
+export interface ThreadListV2DockedShelf {
+  readonly header: ThreadListV2ShelfListItem;
+  readonly rows: ReadonlyArray<ThreadListV2ListItem>;
+}
+
+/**
+ * Splits built list items into the scrolling active list and the shelves docked below it.
+ * Settled stays at the end of the active list unless it is docked too.
+ */
+export function splitThreadListV2DockedShelves(
+  items: ReadonlyArray<ThreadListV2ListItem>,
+  options: { readonly dockSettled: boolean },
+): {
+  readonly active: ReadonlyArray<ThreadListV2ListItem>;
+  readonly shelves: ReadonlyArray<ThreadListV2DockedShelf>;
+} {
+  const active: ThreadListV2ListItem[] = [];
+  const shelves: ThreadListV2DockedShelf[] = [];
+  let rows = active;
+  for (const item of items) {
+    if (item.type === "v2-thread" || item.type === "v2-pending") {
+      rows.push(item);
+    } else if (item.type === "v2-settled-shelf" && !options.dockSettled) {
+      active.push(item);
+      rows = active;
+    } else {
+      rows = [];
+      shelves.push({ header: item, rows });
+    }
+  }
+  return { active, shelves };
+}
+
 // Immutable shells and field-only sorting make element-identical inputs produce identical output.
 let lastSettledInput: ReadonlyArray<EnvironmentThreadShell> = [];
 let lastSettledOutput: ReadonlyArray<EnvironmentThreadShell> = [];

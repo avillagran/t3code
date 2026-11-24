@@ -189,6 +189,7 @@ export interface Preferences {
   readonly threadListSnoozedShelfExpanded?: boolean;
   readonly threadListInputShelfExpanded?: boolean;
   readonly threadListWorkingShelfExpanded?: boolean;
+  readonly threadListSettledShelfDocked?: boolean;
   readonly threadListFilters?: ThreadListFilters;
   readonly pullRequestListFilters?: PullRequestListPreferences;
   readonly workspaceSelections?: WorkspaceSelections;
@@ -283,6 +284,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     threadListSnoozedShelfExpanded?: boolean;
     threadListInputShelfExpanded?: boolean;
     threadListWorkingShelfExpanded?: boolean;
+    threadListSettledShelfDocked?: boolean;
     threadListFilters?: ThreadListFilters;
     pullRequestListFilters?: PullRequestListPreferences;
     workspaceSelections?: WorkspaceSelections;
@@ -464,6 +466,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (typeof parsed.threadListWorkingShelfExpanded === "boolean") {
     preferences.threadListWorkingShelfExpanded = parsed.threadListWorkingShelfExpanded;
+  }
+  if (typeof parsed.threadListSettledShelfDocked === "boolean") {
+    preferences.threadListSettledShelfDocked = parsed.threadListSettledShelfDocked;
   }
   if (isThreadListFilters(parsed.threadListFilters)) {
     preferences.threadListFilters = parsed.threadListFilters;

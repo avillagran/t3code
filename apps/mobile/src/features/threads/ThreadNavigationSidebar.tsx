@@ -16,7 +16,7 @@ import { AnimatedLegendList } from "@legendapp/list/reanimated";
 import { THREAD_LIST_ROW_LAYOUT } from "./threadListAnimations";
 import { useAtomValue } from "@effect/atom-react";
 import { useMemo, useRef, useState } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, useWindowDimensions, View } from "react-native";
 import { GestureDetector, useNativeGesture } from "react-native-gesture-handler";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { FLOATING_TABS } from "../layout/workspace/floating-workspace-tabs";
@@ -71,6 +71,7 @@ import {
   ThreadListV2WorkingShelfHeader,
 } from "./thread-list-v2-items";
 import { useThreadRowProviderInstanceResolver } from "./thread-provider-instance";
+import { ThreadListV2DockedShelves } from "./ThreadListV2DockedShelves";
 import type { ThreadPrPresentation } from "../../state/thread-pr-presentation";
 import { ThreadPrDemandProvider } from "../../state/thread-pr-demand";
 import {
@@ -249,6 +250,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
   const {
     loaded: shelfPreferencesLoaded,
     settledShelfExpanded,
+    settledShelfDocked,
     snoozedShelfExpanded,
     workingShelfEnabled,
     workingShelfExpanded,
@@ -277,6 +279,8 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
   const {
     layout: threadListV2Layout,
     items: threadListV2Items,
+    activeItems: activeThreadListV2Items,
+    dockedShelves,
     contentOnlyThreadKeys,
     olderSettledShelf,
   } = useThreadListV2({
@@ -300,24 +304,28 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     workingShelfExpanded,
     snoozedShelfExpanded,
     settledShelfExpanded,
+    settledShelfDocked,
     selectedThreadKey,
   });
-  const listItems: readonly SidebarListItem[] =
+  const showMoreItem: SidebarListItem | null =
     settledShelfExpanded && threadListV2Layout.hiddenSettledCount > 0
-      ? [
-          ...threadListV2Items,
-          {
-            type: "v2-show-more",
-            key: "v2-show-more",
-            hiddenCount: threadListV2Layout.hiddenSettledCount,
-            ...(olderSettledShelf.loading
-              ? { state: "loading" as const }
-              : olderSettledShelf.failed
-                ? { state: "failed" as const }
-                : {}),
-          },
-        ]
-      : threadListV2Items;
+      ? {
+          type: "v2-show-more",
+          key: "v2-show-more",
+          hiddenCount: threadListV2Layout.hiddenSettledCount,
+          ...(olderSettledShelf.loading
+            ? { state: "loading" as const }
+            : olderSettledShelf.failed
+              ? { state: "failed" as const }
+              : {}),
+        }
+      : null;
+  const listItems: readonly SidebarListItem[] =
+    showMoreItem !== null && !settledShelfDocked
+      ? [...activeThreadListV2Items, showMoreItem]
+      : activeThreadListV2Items;
+  const [listRegionHeight, setListRegionHeight] = useState<number | null>(null);
+  const { height: windowHeight } = useWindowDimensions();
 
   const handleSwipeableWillOpen = (methods: SwipeableMethods) => {
     if (openSwipeableRef.current !== methods) {
@@ -371,7 +379,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     threadSearchMatchByKey,
     workingShelfEnabled,
   };
-  useThreadJumpShortcuts(listItems, handleSelectThread, props.onOpenPendingTask);
+  useThreadJumpShortcuts(threadListV2Items, handleSelectThread, props.onOpenPendingTask);
   const sidebarItemsAreEqual = (previous: SidebarListItem, item: SidebarListItem): boolean => {
     if (isThreadListV2ListItem(previous) && isThreadListV2ListItem(item)) {
       return threadListV2ListItemsAreEqual(previous, item);
@@ -548,6 +556,20 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
         );
     }
   };
+  const renderDockedItem = (item: ThreadListV2ListItem) => renderListItem({ item });
+  const dockedShelvesView = (bottomClearance: number) => (
+    <ThreadListV2DockedShelves
+      shelves={dockedShelves}
+      renderItem={renderDockedItem}
+      settledFooter={
+        showMoreItem !== null && settledShelfDocked ? renderListItem({ item: showMoreItem }) : null
+      }
+      regionHeight={listRegionHeight ?? windowHeight}
+      pane="sidebar"
+      style={{ paddingHorizontal: Platform.OS === "ios" ? 8 : 0, paddingBottom: bottomClearance }}
+    />
+  );
+  const hasDockedShelves = dockedShelves.length > 0;
   const header = (
     <WorkspaceListHeader
       accessibilityLabel={gt("{appName}, Threads", { appName: "T3 Code" })}
@@ -625,7 +647,10 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     return (
       <>
         {header}
-        <View className="flex-1">
+        <View
+          className="flex-1"
+          onLayout={(event) => setListRegionHeight(event.nativeEvent.layout.height)}
+        >
           <SwipeableScrollGateProvider enabled={swipeEnabled}>
             <GestureDetector gesture={sidebarScrollGesture}>
               <AnimatedLegendList
@@ -645,7 +670,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
                 contentContainerStyle={[
                   styles.threadListContent,
                   {
-                    paddingBottom: Math.max(insets.bottom, 16) + 16,
+                    paddingBottom: hasDockedShelves ? 16 : Math.max(insets.bottom, 16) + 16,
                     paddingTop: 6,
                   },
                 ]}
@@ -656,9 +681,10 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
                 scrollEventThrottle={16}
                 showsVerticalScrollIndicator={false}
                 style={styles.threadList}
-                ListEmptyComponent={listEmpty}
+                ListEmptyComponent={hasDockedShelves ? null : listEmpty}
               />
             </GestureDetector>
+            {dockedShelvesView(Math.max(insets.bottom, 16))}
           </SwipeableScrollGateProvider>
           <ThreadUndoNotice visible={props.visible} />
         </View>
@@ -667,6 +693,9 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
   }
 
   // Android: the bar floats below the list.
+  const androidListBottomClearance = floatingTabsEnabled
+    ? FLOATING_TABS.bottom + FLOATING_TABS.edge + fabSize
+    : Math.max(insets.bottom, 16) + fabClearance - insets.bottom;
   return (
     <View testID="thread-navigation-sidebar" className="flex-1 bg-header">
       <View
@@ -679,8 +708,9 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
           borderTopRightRadius: 28,
           overflow: "hidden",
         }}
+        onLayout={(event) => setListRegionHeight(event.nativeEvent.layout.height)}
       >
-        {listItems.length === 0 ? (
+        {listItems.length === 0 && !hasDockedShelves ? (
           <View className="flex-1 items-center justify-center">{listEmpty}</View>
         ) : (
           <SwipeableScrollGateProvider enabled={swipeEnabled}>
@@ -697,9 +727,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
                 keyExtractor={(item) => item.key}
                 renderItem={renderListItem}
                 contentContainerStyle={{
-                  paddingBottom: floatingTabsEnabled
-                    ? FLOATING_TABS.bottom + FLOATING_TABS.edge + fabSize
-                    : Math.max(insets.bottom, 16) + fabClearance - insets.bottom,
+                  paddingBottom: hasDockedShelves ? 16 : androidListBottomClearance,
                   paddingTop: 6,
                 }}
                 keyboardDismissMode="on-drag"
@@ -709,9 +737,18 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
                 scrollEventThrottle={16}
                 showsVerticalScrollIndicator={false}
                 style={styles.threadList}
-                ListEmptyComponent={listEmpty}
+                ListEmptyComponent={hasDockedShelves ? null : listEmpty}
               />
             </GestureDetector>
+            {dockedShelvesView(
+              floatingTabsEnabled
+                ? androidListBottomClearance
+                : // Only the New thread button, when shown, needs clearing.
+                  Math.min(
+                    androidListBottomClearance,
+                    Math.max(insets.bottom, 12) + 6 + fabSize + 8 - insets.bottom,
+                  ),
+            )}
           </SwipeableScrollGateProvider>
         )}
       </View>
