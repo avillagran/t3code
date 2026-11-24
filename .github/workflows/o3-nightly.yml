@@ -1,0 +1,243 @@
+name: o3 nightly
+
+# Rebuilds the latest upstream nightly with the patch branches in patches.json and
+# publishes it as a fork release that the desktop updater installs.
+
+on:
+  schedule:
+    - cron: "23 */2 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Build even if this nightly already has a release
+        type: boolean
+        default: false
+      tag:
+        description: "Upstream tag to build (default: latest nightly)"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: o3-nightly
+  cancel-in-progress: false
+
+env:
+  GIT_AUTHOR_NAME: Andrés Villagrán
+  GIT_AUTHOR_EMAIL: andres@villagranquiroz.cl
+  GIT_COMMITTER_NAME: Andrés Villagrán
+  GIT_COMMITTER_EMAIL: andres@villagranquiroz.cl
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      sha: ${{ steps.apply.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: pipeline
+
+      - name: Plan
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          upstream=$(jq -r .upstream pipeline/patches.json)
+          tag=$INPUT_TAG
+          if [[ -z $tag ]]; then
+            tag=$(git ls-remote --tags --refs "https://github.com/$upstream" 'v*-nightly.*' \
+              | sed 's#.*refs/tags/##' | sort -V | tail -1)
+          fi
+          [[ $tag =~ ^v(.+-nightly\.[0-9]{8})\.([0-9]+)$ ]] || { echo "::error::unexpected tag $tag"; exit 1; }
+          prefix=${BASH_REMATCH[1]}
+          run=${BASH_REMATCH[2]}
+          existing=$(gh release list -R "$GITHUB_REPOSITORY" --limit 100 --json tagName -q '.[].tagName' \
+            | grep -cE "^v${prefix//./\\.}\.${run}[0-9]$" || true)
+          build=true
+          if [[ $existing -gt 0 && $FORCE != true ]]; then build=false; fi
+          if [[ $existing -ge 9 ]]; then echo "::error::no rebuild slots left for $tag"; exit 1; fi
+          # Run number times ten plus a rebuild slot: newer than the official nightly, ordered among rebuilds.
+          version="$prefix.${run}$((existing + 1))"
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          echo "build=$build" >>"$GITHUB_OUTPUT"
+          echo "upstream=$upstream" >>"$GITHUB_OUTPUT"
+          echo "$tag -> $version (build=$build)" >>"$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v5
+        if: steps.plan.outputs.build == 'true'
+        with:
+          path: src
+          fetch-depth: 0
+          ref: ${{ steps.plan.outputs.tag }}
+          repository: ${{ steps.plan.outputs.upstream }}
+
+      - name: Apply patches
+        id: apply
+        if: steps.plan.outputs.build == 'true'
+        working-directory: src
+        env:
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: |
+          git remote add fork "https://x-access-token:${{ github.token }}@github.com/$GITHUB_REPOSITORY"
+          git fetch -q fork '+refs/heads/patches/*:refs/remotes/origin/patches/*'
+          bash ../pipeline/scripts/apply-patches.sh ../pipeline/patches.json "$TAG" "$RUNNER_TEMP/report.json"
+          echo "sha=$(git rev-parse o3/build)" >>"$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        if: steps.plan.outputs.build == 'true'
+        with:
+          node-version-file: src/package.json
+
+      - name: Typecheck
+        id: typecheck
+        if: steps.plan.outputs.build == 'true'
+        working-directory: src
+        run: |
+          npm install -g "$(jq -r .packageManager package.json)" && pnpm install --frozen-lockfile
+          export PATH="$PWD/node_modules/.bin:$PATH"
+          failed=()
+          for pkg in packages/contracts packages/shared packages/client-runtime apps/server apps/web apps/desktop; do
+            (cd "$pkg" && vp run typecheck) >"$RUNNER_TEMP/typecheck-$(basename "$pkg").log" 2>&1 || failed+=("$pkg")
+          done
+          if [[ ${#failed[@]} -gt 0 ]]; then
+            for pkg in "${failed[@]}"; do grep -E 'error TS' "$RUNNER_TEMP/typecheck-$(basename "$pkg").log" | head -40; done
+            jq --arg failed "${failed[*]}" '.typecheck = $failed' "$RUNNER_TEMP/report.json" >"$RUNNER_TEMP/r" && mv "$RUNNER_TEMP/r" "$RUNNER_TEMP/report.json"
+            echo "::error::typecheck failed in ${failed[*]}"
+            exit 1
+          fi
+
+      - name: Push rebased branches
+        if: steps.plan.outputs.build == 'true'
+        working-directory: src
+        run: |
+          for name in $(jq -r '.patches[] | select(.status == "ok") | .name' "$RUNNER_TEMP/report.json"); do
+            git push -q -f fork "patches/$name"
+          done
+          git push -q -f fork o3/build
+
+      - name: Report conflicts
+        if: always() && steps.apply.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: |
+          report=$RUNNER_TEMP/report.json
+          cp "$report" "$RUNNER_TEMP/patch-report.json"
+          gh label create patch-conflict -R "$GITHUB_REPOSITORY" --color B60205 2>/dev/null || true
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          problems=$(jq -c '.patches[] | select(.status == "conflict" or .status == "merge-conflict")' "$report")
+          if [[ -n $(jq -r '.typecheck // empty' "$report") ]]; then
+            problems+=$'\n'$(jq -c '{name: "build", status: "typecheck", files: (.typecheck | split(" "))}' "$report")
+          fi
+          while read -r item; do
+            [[ -z $item ]] && continue
+            name=$(jq -r .name <<<"$item")
+            title="o3: $name does not apply to the latest nightly"
+            body=$(printf 'Upstream tag: `%s`\nStatus: `%s`\nFiles:\n%s\n\nRun: %s\n' "$TAG" \
+              "$(jq -r .status <<<"$item")" "$(jq -r '.files[] | "- `" + . + "`"' <<<"$item")" "$run_url")
+            number=$(gh issue list -R "$GITHUB_REPOSITORY" --label patch-conflict --state open \
+              --search "in:title \"$title\"" --json number -q '.[0].number')
+            if [[ -n $number ]]; then
+              gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$body"
+            else
+              gh issue create -R "$GITHUB_REPOSITORY" --label patch-conflict --title "$title" --body "$body"
+            fi
+          done <<<"$problems"
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.apply.outcome == 'success'
+        with:
+          name: patch-report
+          path: ${{ runner.temp }}/patch-report.json
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: System packages
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libsecret-1-dev pkg-config patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+
+      - name: Install
+        run: |
+          npm install -g "$(jq -r .packageManager package.json)" && pnpm install --frozen-lockfile
+          echo "$PWD/node_modules/.bin" >>"$GITHUB_PATH"
+
+      - name: Align package versions
+        run: node scripts/update-release-package-versions.ts "${{ needs.prepare.outputs.version }}"
+
+      - name: Build AppImage
+        env:
+          # Public client configuration from the official desktop bundle; T3 Connect needs it.
+          T3CODE_CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmsudDMuY29kZXMk
+          T3CODE_CLERK_JWT_TEMPLATE: t3-relay
+          T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: hzxSgY2cH10sDU2r
+          T3CODE_RELAY_URL: https://relay.t3.codes
+          T3CODE_DESKTOP_UPDATE_REPOSITORY: ${{ github.repository }}
+        run: |
+          node scripts/build-desktop-artifact.ts --platform linux --target AppImage \
+            --arch "${{ matrix.arch }}" --build-version "${{ needs.prepare.outputs.version }}" \
+            --output-dir release --verbose
+          ls -la release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.arch }}
+          path: |
+            release/*.AppImage
+            release/*.yml
+            release/*.blockmap
+          if-no-files-found: error
+
+  release:
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+        run: |
+          ls -la dist
+          notes=$(jq -r --arg tag "$TAG" '"Upstream `" + $tag + "` plus:\n" +
+            ([.patches[] | "- `patches/" + .name + "`: " + .status] | join("\n"))' dist/patch-report.json)
+          gh release create "v$VERSION" -R "$GITHUB_REPOSITORY" --target "$SHA" --prerelease \
+            --title "T3 Code o3 $VERSION" --notes "$notes" \
+            dist/*.AppImage dist/*.yml dist/*.blockmap dist/patch-report.json
