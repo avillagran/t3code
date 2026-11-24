@@ -16,10 +16,12 @@
       "base": "usage-strip"
     },
     {
-      "name": "sidebar-shelves"
+      "name": "sidebar-shelves",
+      "base": "usage-strip"
     },
     {
-      "name": "mobile-sidebar"
+      "name": "mobile-sidebar",
+      "base": "sidebar-shelves"
     },
     {
       "name": "mobile-task-board"

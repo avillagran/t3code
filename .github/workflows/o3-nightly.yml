@@ -206,7 +206,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: System packages
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq libsecret-1-dev pkg-config patchelf
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libsecret-1-dev pkg-config patchelf imagemagick libgtk-3-0t64 libnss3 libasound2t64 libgbm1
 
       - uses: actions/setup-node@v4
         with:
