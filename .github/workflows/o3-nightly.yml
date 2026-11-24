@@ -154,11 +154,11 @@ jobs:
             body=$(printf 'Upstream tag: `%s`\nStatus: `%s`\nFiles:\n%s\n\nRun: %s\n' "$TAG" \
               "$(jq -r .status <<<"$item")" "$(jq -r '.files[] | "- `" + . + "`"' <<<"$item")" "$run_url")
             number=$(gh issue list -R "$GITHUB_REPOSITORY" --label patch-conflict --state open \
-              --search "in:title \"$title\"" --json number -q '.[0].number')
+              --search "in:title \"$title\"" --json number -q '.[0].number' || true)
             if [[ -n $number ]]; then
-              gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$body"
+              gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$body" || echo "::warning::could not comment on issue $number"
             else
-              gh issue create -R "$GITHUB_REPOSITORY" --label patch-conflict --title "$title" --body "$body"
+              gh issue create -R "$GITHUB_REPOSITORY" --label patch-conflict --title "$title" --body "$body" || echo "::warning::could not open an issue for $name"
             fi
           done <<<"$problems"
           # Wakes the T3 scheduled task that rebases and fixes the patch.
