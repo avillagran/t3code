@@ -990,12 +990,17 @@ export function GeneralSettingsPanel() {
           }
         />
         <SettingsRow
-          {...searchableSetting("chat-usage-strip")}
-          description="Show a thin row of provider usage bars above the chat. Click it to open the usage page."
+          {...setting("chat-usage-strip")}
+          description={
+            <T>
+              Show a thin row of provider usage bars above the chat. Click it to open the usage
+              page.
+            </T>
+          }
           resetAction={
             settings.chatUsageStripEnabled !== DEFAULT_UNIFIED_SETTINGS.chatUsageStripEnabled ? (
               <SettingResetButton
-                label="usage strip"
+                ariaLabel={gt("Reset usage strip to default")}
                 onClick={() =>
                   updateSettings({
                     chatUsageStripEnabled: DEFAULT_UNIFIED_SETTINGS.chatUsageStripEnabled,
@@ -1010,7 +1015,7 @@ export function GeneralSettingsPanel() {
               onCheckedChange={(checked) =>
                 updateSettings({ chatUsageStripEnabled: Boolean(checked) })
               }
-              aria-label="Usage strip"
+              aria-label={gt("Usage strip")}
             />
           }
         />

@@ -440,7 +440,7 @@ function UsageStripToggle() {
   const enabled = useClientSettings((s) => s.chatUsageStripEnabled);
   return (
     <label className="mb-4 flex items-center justify-end gap-2 text-xs text-muted-foreground">
-      Show usage above chat
+      <T>Show usage above chat</T>
       <Switch
         size="sm"
         checked={enabled}

@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigate } from "@tanstack/react-router";
 import { memo } from "react";
@@ -15,6 +16,7 @@ export const ChatUsageStrip = memo(function ChatUsageStrip() {
   const presentations = useAtomValue(environmentPresentations.presentationsWithProvidersAtom);
   const nowMinute = useNowMinute();
   const navigate = useNavigate();
+  const gt = useGT();
   const items = enabled
     ? collectUsageStripItems(presentations, Date.parse(`${nowMinute}:00Z`))
     : [];
@@ -22,7 +24,7 @@ export const ChatUsageStrip = memo(function ChatUsageStrip() {
   return (
     <button
       type="button"
-      aria-label="Open provider usage"
+      aria-label={gt("Open provider usage")}
       onClick={() => void navigate({ to: "/usage" })}
       className="flex w-full shrink-0 cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 overflow-hidden bg-background px-(--workspace-gutter-start,1rem) py-1 text-start text-2xs text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >

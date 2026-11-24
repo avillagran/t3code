@@ -3,10 +3,10 @@ import {
   collectLimitPools,
   displayLimitWindows,
   elapsedShare,
-  formatDuration,
   type LimitPool,
   type LimitPresentations,
 } from "@t3tools/shared/usageLimits";
+import { formatDuration } from "@t3tools/shared/usageLimitsCopy";
 
 export interface UsageStripItem {
   readonly key: string;

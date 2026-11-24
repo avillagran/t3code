@@ -513,9 +513,9 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "chat-usage-strip",
-    title: "Usage strip",
+    title: msg("Usage strip"),
     to: "/settings/general",
-    searchTerms: ["provider usage limits quota bars 5h weekly reset header chat"],
+    searchTerms: [msg("provider usage limits quota bars 5h weekly reset header chat")],
   },
   {
     id: "boring-sidebar",
