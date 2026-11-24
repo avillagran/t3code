@@ -136,6 +136,7 @@ jobs:
         if: always() && steps.apply.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
+          CONFLICT_WEBHOOK: ${{ secrets.O3_CONFLICT_WEBHOOK }}
           TAG: ${{ steps.plan.outputs.tag }}
         run: |
           report=$RUNNER_TEMP/report.json
@@ -160,6 +161,11 @@ jobs:
               gh issue create -R "$GITHUB_REPOSITORY" --label patch-conflict --title "$title" --body "$body"
             fi
           done <<<"$problems"
+          # Wakes the T3 scheduled task that rebases and fixes the patch.
+          if [[ -n ${problems//[$'\n ']/} && -n $CONFLICT_WEBHOOK ]]; then
+            curl -fsS -X POST -H 'content-type: application/json' \
+              -d "$(jq -c --arg tag "$TAG" '{tag: $tag}' <<<'{}')" "$CONFLICT_WEBHOOK" || true
+          fi
 
       - uses: actions/upload-artifact@v4
         if: always() && steps.apply.outcome == 'success'

@@ -13,8 +13,13 @@ result as a release of this fork.
   it as newer than the official build and orders rebuilds after it.
 - The AppImages set the desktop updater to this fork, so an installed build updates from these
   releases.
-- When a patch stops applying, the run opens an issue labelled `patch-conflict` and the release ships
-  without that patch. Fix the branch, push it, then start the workflow with `force` set.
+- When a patch stops applying, the run opens an issue labelled `patch-conflict`, ships the release
+  without that patch, and calls the webhook in secret `O3_CONFLICT_WEBHOOK`. That webhook starts a
+  T3 Code scheduled task, which rebases the branch, pushes it, closes the issue, and starts the
+  workflow again with `force`.
+- CI never pushes code. `GITHUB_TOKEN` cannot push commits that touch upstream workflow files. The
+  patched tree moves between jobs as a git bundle, and patch branches are refreshed from a
+  developer machine.
 
 Add a patch: push `patches/<name>` based on a recent nightly tag, then add it to `patches.json`.
 
