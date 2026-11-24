@@ -11,8 +11,10 @@ result as a release of this fork.
   and publishes a prerelease. The version adds one digit to the upstream run number, so
   `v0.1.12-nightly.20261124.5178` becomes `v0.1.12-nightly.20261124.51781`. The updater then treats
   it as newer than the official build and orders rebuilds after it.
-- The AppImages set the desktop updater to this fork, so an installed build updates from these
-  releases.
+- The AppImages point the desktop updater at this fork. On the developer machines, the T3 Companion
+  manages updates instead: it installs each new AppImage after checking its SHA-256 digest, keeps the
+  previous one for rollback, restarts T3 when no thread is working, and shows the patch report in the
+  Omarchy bar. It launches T3 with `T3CODE_DISABLE_AUTO_UPDATE=1`, so the two updaters never race.
 - When a patch stops applying, the run opens an issue labelled `patch-conflict`, ships the release
   without that patch, and calls the webhook in secret `O3_CONFLICT_WEBHOOK`. That webhook starts a
   T3 Code scheduled task, which rebases the branch, pushes it, closes the issue, and starts the
