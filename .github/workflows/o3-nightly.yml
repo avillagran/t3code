@@ -342,6 +342,6 @@ jobs:
           notes=$(jq -r --arg tag "$TAG" '"Upstream `" + $tag + "`, build `" + .build + "`, plus:\n" +
             ([.patches[] | "- `patches/" + .name + "`: " + .status] | join("\n"))' dist/patch-report.json)
           shopt -s nullglob
-          files=(dist/*.AppImage dist/*.yml dist/*.blockmap dist/*.apk dist/patch-report.json)
+          files=(dist/*.AppImage dist/nightly-linux*.yml dist/*.blockmap dist/*.apk dist/patch-report.json)
           gh release create "v$VERSION" -R "$GITHUB_REPOSITORY" --prerelease \
             --title "T3 Code o3 $VERSION" --notes "$notes" "${files[@]}"
