@@ -5,6 +5,9 @@
       "name": "no-telemetry"
     },
     {
+      "name": "startup-progress"
+    },
+    {
       "name": "perf-memory"
     },
     {
