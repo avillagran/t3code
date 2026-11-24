@@ -343,5 +343,10 @@ jobs:
             ([.patches[] | "- `patches/" + .name + "`: " + .status] | join("\n"))' dist/patch-report.json)
           shopt -s nullglob
           files=(dist/*.AppImage dist/nightly-linux*.yml dist/*.blockmap dist/*.apk dist/patch-report.json)
-          gh release create "v$VERSION" -R "$GITHUB_REPOSITORY" --prerelease \
-            --title "T3 Code o3 $VERSION" --notes "$notes" "${files[@]}"
+          # A re-run of failed jobs reaches this step again; it then fills in the missing assets.
+          if gh release view "v$VERSION" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" -R "$GITHUB_REPOSITORY" --clobber "${files[@]}"
+          else
+            gh release create "v$VERSION" -R "$GITHUB_REPOSITORY" --prerelease \
+              --title "T3 Code o3 $VERSION" --notes "$notes" "${files[@]}"
+          fi
