@@ -384,4 +384,21 @@ export const make = Effect.gen(function* () {
   return AnalyticsService.of({ record, flush, recordOwners });
 });
 
-export const layer = Layer.effect(AnalyticsService, make);
+// This build never sends analytics: nothing is buffered, identified, or delivered.
+export const layer = Layer.succeed(
+  AnalyticsService,
+  AnalyticsService.of({
+    // Called on hot paths; spans for calls that do nothing would only add noise.
+    record: Effect.fnUntraced(function* (
+      _event: string,
+      _properties?: Readonly<Record<string, unknown>>,
+    ) {
+      return false;
+    }),
+    flush: Effect.void,
+    recordOwners: Effect.fnUntraced(function* (
+      _owners: ReadonlyArray<TelemetryOwner>,
+      _observedBy: "server" | "client",
+    ) {}),
+  }),
+);

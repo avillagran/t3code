@@ -83,22 +83,12 @@ const buildTimeRelayClientTracing = {
   ),
 } as const;
 
+// This build never exports relay traces, whatever the build or the environment provides.
 export function resolveRelayClientTracingConfig(
-  env: Readonly<Record<string, string | undefined>> = process.env,
-  fallback = buildTimeRelayClientTracing,
-) {
-  if (!isRelayTracingEnabled(env)) {
-    return null;
-  }
-
-  const tracesUrl = env.T3CODE_RELAY_CLIENT_OTLP_TRACES_URL?.trim() || fallback.tracesUrl;
-  const tracesDataset =
-    env.T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET?.trim() || fallback.tracesDataset;
-  const tracesToken = env.T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN?.trim() || fallback.tracesToken;
-  const normalizedTracesUrl = normalizeSecureUrl(tracesUrl);
-  return normalizedTracesUrl && tracesDataset && tracesToken
-    ? { tracesUrl: normalizedTracesUrl, tracesDataset, tracesToken }
-    : null;
+  _env: Readonly<Record<string, string | undefined>> = process.env,
+  _fallback = buildTimeRelayClientTracing,
+): { tracesUrl: string; tracesDataset: string; tracesToken: string } | null {
+  return null;
 }
 
 export function makeRelayUrlConfig(fallback = buildTimeRelayUrl) {

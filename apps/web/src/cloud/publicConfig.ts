@@ -79,19 +79,13 @@ export function relayTelemetryEnabled(): boolean | null {
   return serverRelayTelemetry ?? (isHostedStaticApp() ? true : null);
 }
 
-export function resolveRelayTracingConfig() {
-  // The relay exporter is created during module initialization, so this must be synchronous.
-  if (relayTelemetryEnabled() === false) {
-    return null;
-  }
-  const { relayTracing } = resolveCloudPublicConfig();
-  return relayTracing.tracesUrl && relayTracing.tracesDataset && relayTracing.tracesToken
-    ? {
-        tracesUrl: relayTracing.tracesUrl,
-        tracesDataset: relayTracing.tracesDataset,
-        tracesToken: relayTracing.tracesToken,
-      }
-    : null;
+// This build never exports relay traces.
+export function resolveRelayTracingConfig(): {
+  tracesUrl: string;
+  tracesDataset: string;
+  tracesToken: string;
+} | null {
+  return null;
 }
 
 export function hasCloudPublicConfig(): boolean {
