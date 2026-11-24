@@ -265,8 +265,10 @@ function ThreadListV2Section(props: {
   const snoozed = props.tone === "snoozed";
   const sidebarPane = props.pane === "sidebar";
   const className = cn(
-    "mb-1.5 mt-4 flex-row items-center gap-2.5",
-    props.pane === "sidebar" ? "px-3" : "px-5",
+    "flex-row items-center gap-2.5",
+    props.disclosure
+      ? cn("mt-1.5 rounded-lg bg-subtle py-2", sidebarPane ? "mx-1.5 px-1.5" : "mx-2 px-3")
+      : cn("mb-1.5 mt-4", sidebarPane ? "px-3" : "px-5"),
   );
   const content = (
     <>
