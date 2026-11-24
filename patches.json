@@ -1,10 +1,28 @@
 {
   "upstream": "pingdotgg/t3code",
   "patches": [
-    { "name": "perf-memory" },
-    { "name": "desktop-background", "base": "perf-memory" },
-    { "name": "usage-strip" },
-    { "name": "task-board", "base": "usage-strip" },
-    { "name": "sidebar-shelves" }
+    {
+      "name": "perf-memory"
+    },
+    {
+      "name": "desktop-background",
+      "base": "perf-memory"
+    },
+    {
+      "name": "usage-strip"
+    },
+    {
+      "name": "task-board",
+      "base": "usage-strip"
+    },
+    {
+      "name": "sidebar-shelves"
+    },
+    {
+      "name": "mobile-sidebar"
+    },
+    {
+      "name": "mobile-task-board"
+    }
   ]
 }
