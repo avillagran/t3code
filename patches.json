@@ -2,9 +2,6 @@
   "upstream": "pingdotgg/t3code",
   "patches": [
     {
-      "name": "no-telemetry"
-    },
-    {
       "name": "startup-splash"
     },
     {
