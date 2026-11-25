@@ -364,7 +364,11 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
   yield* Effect.gen(function* () {
     for (const [index, [id, name]] of pending.entries()) {
       if (Option.isSome(progress)) {
-        yield* Ref.set(progress.value.current, { current: index + 1, total: pending.length });
+        yield* Ref.set(progress.value.current, {
+          current: index + 1,
+          total: pending.length,
+          migration: `${id}_${name}`,
+        });
       }
       if (latestRecordedId > 0) {
         yield* Effect.log(

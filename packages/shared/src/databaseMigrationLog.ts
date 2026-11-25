@@ -33,10 +33,17 @@ export function databaseMigrationProgress(
   if (!match) return previous;
   const current = Number(match[1]);
   const total = Number(match[2]);
-  return Number.isSafeInteger(current) &&
-    Number.isSafeInteger(total) &&
-    current > 0 &&
-    current <= total
-    ? { current, total }
-    : previous;
+  if (!Number.isSafeInteger(current) || !Number.isSafeInteger(total)) return previous;
+  if (current <= 0 || current > total) return previous;
+  const migration = migrationName(output.slice(step, step + MIGRATION_NAME_WINDOW));
+  return migration ? { current, total, migration } : { current, total };
+}
+
+// Pretty, logfmt and JSON loggers all print the `migration` annotation shortly after the message.
+const MIGRATION_NAME_WINDOW = 400;
+
+function migrationName(block: string): string | undefined {
+  const next = block.indexOf(DATABASE_MIGRATION_PROGRESS_MESSAGE, 1);
+  const scope = next === -1 ? block : block.slice(0, next);
+  return /(?:^|\s|")migration"?\s*[:=]\s*"?(\d+_\w+)/.exec(scope)?.[1];
 }

@@ -447,11 +447,119 @@
 
       #boot-shell-progress {
         position: absolute;
-        top: 100%;
+        top: calc(100% + 8px);
+        display: flex;
         width: min(360px, 80vw);
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
         text-align: center;
         font: 13px system-ui;
-        opacity: 0.7;
+      }
+
+      #boot-shell-progress[hidden] {
+        display: none;
+      }
+
+      #boot-shell-progress .rail {
+        display: flex;
+        width: 220px;
+        gap: 3px;
+        margin-bottom: 14px;
+      }
+
+      #boot-shell-progress .rail.dense {
+        gap: 1px;
+      }
+
+      #boot-shell-progress .seg {
+        position: relative;
+        flex: 1;
+        height: 3px;
+        overflow: hidden;
+        border-radius: 2px;
+        background: color-mix(in srgb, currentColor 14%, transparent);
+      }
+
+      #boot-shell-progress .seg::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: currentColor;
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 0.35s ease-out;
+      }
+
+      #boot-shell-progress .seg.done::before {
+        transform: scaleX(1);
+      }
+
+      /* Transform-only and limited to one 3px segment, so it stays on the compositor. */
+      #boot-shell-progress .seg.active::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        width: 60%;
+        background: linear-gradient(90deg, transparent, currentColor, transparent);
+        animation: boot-shell-sweep 1.4s ease-in-out infinite;
+      }
+
+      @keyframes boot-shell-sweep {
+        from {
+          transform: translateX(-100%);
+        }
+        to {
+          transform: translateX(170%);
+        }
+      }
+
+      #boot-shell-progress .count {
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.5px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      #boot-shell-progress .count span,
+      #boot-shell-progress .detail {
+        opacity: 0.45;
+      }
+
+      #boot-shell-progress .count span {
+        font-weight: 400;
+      }
+
+      #boot-shell-progress .name {
+        height: 18px;
+        overflow: hidden;
+      }
+
+      #boot-shell-progress .name > span {
+        display: block;
+        animation: boot-shell-rise 0.35s ease-out backwards;
+      }
+
+      @keyframes boot-shell-rise {
+        from {
+          opacity: 0;
+          transform: translateY(100%);
+        }
+      }
+
+      #boot-shell-progress .detail {
+        font:
+          10px ui-monospace,
+          "JetBrains Mono",
+          monospace;
+        font-variant-numeric: tabular-nums;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #boot-shell-progress * {
+          animation: none !important;
+          transition: none !important;
+        }
       }
 
       /* App CSS locks body and #root scrolling once main loads, so the error screen scrolls itself. */
@@ -697,25 +805,84 @@
       <div id="boot-shell">
         <div id="boot-shell-card" aria-label="T3 Code splash screen">
           <img id="boot-shell-logo" src="/apple-touch-icon.png" alt="T3 Code" />
-          <p id="boot-shell-progress" role="status" aria-live="polite"></p>
+          <div id="boot-shell-progress" hidden>
+            <div class="rail"></div>
+            <div class="count" role="status" aria-live="polite"></div>
+            <div class="name"></div>
+            <div class="detail id"></div>
+            <div class="detail time" aria-hidden="true"></div>
+          </div>
         </div>
       </div>
     </div>
     <script>
-      const migrationLabel = document.getElementById("boot-shell-progress");
+      const migrationPanel = document.getElementById("boot-shell-progress");
       const readMigrationProgress = window.desktopBridge?.getDatabaseMigrationProgress;
-      if (readMigrationProgress && migrationLabel) {
-        const updateMigrationProgress = async () => {
-          if (!migrationLabel.isConnected) return;
-          try {
-            const progress = await readMigrationProgress();
-            migrationLabel.textContent = progress
-              ? `Upgrading database (${progress.current} of ${progress.total})`
-              : "";
-          } catch {
-            migrationLabel.textContent = "";
+      if (readMigrationProgress && migrationPanel) {
+        const part = (name) => migrationPanel.querySelector(`.${name}`);
+        const clock = (ms) => {
+          const seconds = Math.floor(ms / 1000);
+          return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+        };
+        const humanize = (migration) => {
+          const words = migration
+            .replace(/^\d+_/, "")
+            .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+            .toLowerCase();
+          return words.charAt(0).toUpperCase() + words.slice(1);
+        };
+        let shownKey = "";
+        let startedAt = 0;
+        let stepStartedAt = 0;
+        const render = (progress) => {
+          if (!progress) {
+            migrationPanel.hidden = true;
+            shownKey = "";
+            return;
           }
-          if (migrationLabel.isConnected) setTimeout(updateMigrationProgress, 1000);
+          const now = Date.now();
+          const key = `${progress.current}/${progress.total} ${progress.migration ?? ""}`;
+          if (key !== shownKey) {
+            if (!startedAt) startedAt = now;
+            if (!shownKey.startsWith(`${progress.current}/${progress.total} `)) stepStartedAt = now;
+            shownKey = key;
+            const rail = part("rail");
+            rail.classList.toggle("dense", progress.total > 12);
+            if (rail.childElementCount !== progress.total) {
+              rail.replaceChildren(
+                ...Array.from({ length: progress.total }, () => {
+                  const seg = document.createElement("div");
+                  seg.className = "seg";
+                  return seg;
+                }),
+              );
+            }
+            Array.from(rail.children).forEach((seg, index) => {
+              const state = index + 1 < progress.current ? " done" : "";
+              seg.className = `seg${index + 1 === progress.current ? " active" : state}`;
+            });
+            const total = document.createElement("span");
+            total.textContent = `/${progress.total}`;
+            part("count").replaceChildren(String(progress.current), total);
+            const name = document.createElement("span");
+            name.textContent = progress.migration
+              ? humanize(progress.migration)
+              : "Upgrading database";
+            part("name").replaceChildren(name);
+            part("id").textContent = progress.migration ?? "";
+            migrationPanel.hidden = false;
+          }
+          part("time").textContent =
+            `${clock(now - stepStartedAt)} this step · ${clock(now - startedAt)} total`;
+        };
+        const updateMigrationProgress = async () => {
+          if (!migrationPanel.isConnected) return;
+          try {
+            render(await readMigrationProgress());
+          } catch {
+            render(null);
+          }
+          if (migrationPanel.isConnected) setTimeout(updateMigrationProgress, 1000);
         };
         void updateMigrationProgress();
       }

@@ -16,6 +16,18 @@ describe("databaseMigrationProgress", () => {
     [`${STEP} (8 of 7)\n`, null],
     [`${STEP} progress="1 of 7"\n${STEP} progress="2 of 7"`, { current: 2, total: 7 }],
     [`${STEP} migration=<script>alert(1)</script> progress="2 of 7"`, { current: 2, total: 7 }],
+    [
+      `${STEP} (2 of 7)\n  migration: 112_RunAttemptsIndex\n  progress: 2 of 7\n`,
+      { current: 2, total: 7, migration: "112_RunAttemptsIndex" },
+    ],
+    [
+      `${STEP} migration=111_Old progress="1 of 7"\n${STEP} progress="2 of 7"`,
+      { current: 2, total: 7 },
+    ],
+    [
+      `{"message":"${STEP}","migration":"113_Drop","progress":"3 of 7"}`,
+      { current: 3, total: 7, migration: "113_Drop" },
+    ],
     [`{"message":"${STEP}","progress":"3 of 7"}`, { current: 3, total: 7 }],
     [`${STEP} progress="2 of 7`, null],
     [`${STEP} progress="0 of 7"`, null],

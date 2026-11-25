@@ -110,7 +110,11 @@ describe("runMigrations", () => {
       );
       assert.deepStrictEqual(
         steps,
-        v2Migrations.map((_, index) => ({ current: index + 1, total: v2Migrations.length })),
+        v2Migrations.map(([id, name], index) => ({
+          current: index + 1,
+          total: v2Migrations.length,
+          migration: `${id}_${name}`,
+        })),
       );
       assert.deepStrictEqual(loggedSteps, steps);
       assert.isNull(yield* Ref.get(current));

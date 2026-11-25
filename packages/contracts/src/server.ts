@@ -1017,6 +1017,7 @@ export class ServerProviderUpdateError extends Schema.TaggedError<ServerProvider
 export const DatabaseMigrationProgress = Schema.Struct({
   current: Schema.Int.check(Schema.isGreaterThan(0)),
   total: Schema.Int.check(Schema.isGreaterThan(0)),
+  migration: Schema.optional(Schema.String),
 });
 export type DatabaseMigrationProgress = typeof DatabaseMigrationProgress.Type;
 
