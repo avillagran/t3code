@@ -102,7 +102,7 @@ import {
 } from "./homeThreadList";
 import { createSwipeRowActivation } from "./swipe-row-activation";
 import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "./thread-swipe-actions";
-import { useFabScroll } from "./FabScrollContext";
+import { useFabLift, useFabScroll } from "./FabScrollContext";
 import { holdLaunchSplashForHomeRows, settleLaunchSplashHomeRows } from "./home-launch-splash";
 import { useWorkspaceTabs } from "../layout/workspace/WorkspaceTabsContext";
 import { HostPressureBanner } from "./HostPressureBanner";
@@ -280,6 +280,7 @@ export function HomeScreen(props: HomeScreenProps) {
     openThreadPullRequests(thread, pr);
   };
   const onFabScroll = useFabScroll();
+  const setFabLift = useFabLift();
   const listRef = useRef<LegendListRef>(null);
   const searchMode = workspace?.state.tabs.threads.searchMode;
   const restoredOffset = workspace?.state.tabs.threads.scrollOffset;
@@ -473,6 +474,16 @@ export function HomeScreen(props: HomeScreenProps) {
   useEffect(() => {
     if (swipeEnabled) activateVisibleRows(activeThreadListV2Items);
   }, [activateVisibleRows, swipeEnabled, activeThreadListV2Items]);
+
+  const hasDockedShelves = dockedShelves.length > 0;
+  // With Material tabs the shelves sit on the tab bar and the New thread button floats above them.
+  const fabRidesOnDock = Platform.OS === "android" && !floatingTabsEnabled && !sidebarSurface;
+  const reportDockHeight = fabRidesOnDock && hasDockedShelves ? setFabLift : undefined;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the FAB lives in the parent layout; drop its lift when the dock goes away
+  useEffect(() => {
+    if (!reportDockHeight) setFabLift?.(0);
+    return () => setFabLift?.(0);
+  }, [reportDockHeight, setFabLift]);
 
   // Docked shelf rows are always on screen, so they skip the viewport's swipe activation.
   const renderV2Item = ({
@@ -822,12 +833,8 @@ export function HomeScreen(props: HomeScreenProps) {
       ? iosBottomClearance
       : (workspace?.bottomClearance ??
         Math.max(insets.bottom, 16) + (Platform.OS === "android" ? fabClearance : 88));
-  // Docked shelves only need to clear the New thread button, not leave scroll room past it.
-  const dockBottomClearance =
-    Platform.OS === "android" && !floatingTabsEnabled
-      ? Math.min(listBottomClearance, insets.bottom + 16 + fabSize + 8)
-      : listBottomClearance;
-  const hasDockedShelves = dockedShelves.length > 0;
+  const dockBottomClearance = fabRidesOnDock ? insets.bottom + 8 : listBottomClearance;
+  const listDockedBottomClearance = fabRidesOnDock ? 16 + fabSize + 16 : 16;
 
   return (
     <View className={containerClassName}>
@@ -877,7 +884,7 @@ export function HomeScreen(props: HomeScreenProps) {
                 scrollEventThrottle={16}
                 contentContainerStyle={{
                   ...listSidePadding,
-                  paddingBottom: hasDockedShelves ? 16 : listBottomClearance,
+                  paddingBottom: hasDockedShelves ? listDockedBottomClearance : listBottomClearance,
                 }}
               />
             </GestureDetector>
@@ -888,6 +895,11 @@ export function HomeScreen(props: HomeScreenProps) {
               regionHeight={listRegionHeight ?? windowHeight}
               pane={sidebarSurface ? "sidebar" : "screen"}
               style={{ ...listSidePadding, paddingBottom: dockBottomClearance }}
+              onLayout={
+                reportDockHeight
+                  ? (event) => reportDockHeight(event.nativeEvent.layout.height)
+                  : undefined
+              }
             />
           </SwipeableScrollGateProvider>
         </View>

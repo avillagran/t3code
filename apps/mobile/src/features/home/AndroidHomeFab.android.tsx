@@ -12,7 +12,7 @@ import {
   type AndroidHomeFabLayout as SharedAndroidHomeFabLayout,
 } from "./AndroidHomeFab.shared";
 import { useWorkspaceState } from "../../state/workspace";
-import { FabScrollContext, FabTopContext } from "./FabScrollContext";
+import { FabLiftContext, FabScrollContext, FabTopContext } from "./FabScrollContext";
 import { updateFabScroll } from "./fab-scroll";
 import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
 import { WorkspaceTabsContext, useWorkspaceTabs } from "../layout/workspace/WorkspaceTabsContext";
@@ -31,6 +31,7 @@ export function AndroidHomeFabLayout(props: ComponentProps<typeof SharedAndroidH
   const [layoutWidth, setLayoutWidth] = useState<number | null>(null);
   const { state } = useWorkspaceState();
   const [expanded, setExpanded] = useState(true);
+  const [lift, setLift] = useState(0);
   const { scale, fabSize } = useAndroidControlSizing();
   const enabledTabs = useEnabledNavigationTabs();
   const barWidth =
@@ -60,7 +61,7 @@ export function AndroidHomeFabLayout(props: ComponentProps<typeof SharedAndroidH
     (!props.sidebar || floatingTabsEnabled) &&
     state.hasConnections &&
     layoutWidth !== null;
-  const fabPosition = androidHomeFabPosition(insets.bottom, props.sidebar);
+  const fabPosition = androidHomeFabPosition(insets.bottom + lift, props.sidebar);
   // Floating navigation already reports its row, FAB included, through bottomClearance.
   const fabTop = showFab && !floatingTabsEnabled ? fabPosition.bottom + size : undefined;
 
@@ -69,9 +70,11 @@ export function AndroidHomeFabLayout(props: ComponentProps<typeof SharedAndroidH
   return (
     <View className="flex-1" onLayout={(event) => setLayoutWidth(event.nativeEvent.layout.width)}>
       <WorkspaceTabsContext value={context}>
-        <FabScrollContext value={onScroll}>
-          <FabTopContext value={fabTop}>{props.children}</FabTopContext>
-        </FabScrollContext>
+        <FabLiftContext value={setLift}>
+          <FabScrollContext value={onScroll}>
+            <FabTopContext value={fabTop}>{props.children}</FabTopContext>
+          </FabScrollContext>
+        </FabLiftContext>
       </WorkspaceTabsContext>
       {showFab ? (
         <ScrollComposeButton

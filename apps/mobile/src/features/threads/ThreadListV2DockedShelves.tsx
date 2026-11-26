@@ -1,5 +1,11 @@
 import { Fragment, type ReactNode } from "react";
-import { ScrollView, View, type StyleProp, type ViewStyle } from "react-native";
+import {
+  ScrollView,
+  View,
+  type LayoutChangeEvent,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 
 import { cn } from "../../lib/cn";
 import type { ThreadListV2DockedShelf, ThreadListV2ListItem } from "./threadListV2";
@@ -19,6 +25,7 @@ export function ThreadListV2DockedShelves(props: {
   readonly regionHeight: number;
   readonly pane: "screen" | "sidebar";
   readonly style?: StyleProp<ViewStyle>;
+  readonly onLayout?: (event: LayoutChangeEvent) => void;
 }) {
   if (props.shelves.length === 0) return null;
   const expandedCount = props.shelves.filter(
@@ -33,6 +40,7 @@ export function ThreadListV2DockedShelves(props: {
         props.pane === "sidebar" ? "border-drawer-border" : "border-border-subtle",
       )}
       style={props.style}
+      onLayout={props.onLayout}
     >
       {props.shelves.map((shelf) => {
         const footer = shelf.header.type === "v2-settled-shelf" ? props.settledFooter : null;
