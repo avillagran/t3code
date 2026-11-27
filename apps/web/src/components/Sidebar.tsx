@@ -3597,396 +3597,392 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               onDragOver={handleThreadDragOver}
               onDragEnd={handleThreadDragEnd}
             >
-                <SortableContext items={sortableIds} strategy={sidebarSortingStrategy}>
-                  {(() => {
-                    const renderThreadRow = (
-                      thread: EnvironmentThreadShell,
-                      section: SidebarSection,
-                      // The tree row of the project folder this row sits in.
-                      folderRow?: string,
-                    ) => {
-                      const threadKey = scopedThreadKey(
-                        scopeThreadRef(thread.environmentId, thread.id),
-                      );
-                      const isCard =
-                        section === "active" ||
-                        section === "pinned" ||
-                        section === "input" ||
-                        section === "working";
-                      const rowVariant = folderRow
-                        ? folderRowsMultiline
-                          ? "folder-multiline"
-                          : "folder"
-                        : isCard
-                          ? "card"
-                          : "slim";
-                      return (
-                        <SortableThreadRow
-                          key={threadKey}
-                          sortableId={threadKey}
-                          contextDrag={isContextDrag}
-                          sortableDisabled={
-                            renamingThreadKey === threadKey ||
-                            !draggableThreadKeys.has(threadKey) ||
-                            optimisticDrop !== null
-                          }
-                          thread={thread}
-                          variant={rowVariant}
-                          navigationParent={
-                            folderRow ??
-                            (section === "input" ||
-                            section === "working" ||
-                            section === "snoozed" ||
-                            section === "settled"
-                              ? `shelf:${section}`
-                              : undefined)
-                          }
-                          variantAction={
-                            section === "snoozed"
-                              ? "unsnooze"
-                              : section === "settled"
-                                ? "unsettle"
-                                : "settle"
-                          }
-                          settlementSupported={serverConfigs.has(thread.environmentId)}
-                          snoozeSupported={serverConfigs.has(thread.environmentId)}
-                          pinningSupported={serverConfigs.has(thread.environmentId)}
-                          isPinned={thread.pinnedAt != null}
-                          dropVerb={
-                            dragState?.activeKey === threadKey
-                              ? resolveSidebarDropVerb(dragState.activeSection, dragTargetSection)
-                              : null
-                          }
-                          dragOverPinned={
-                            dragState?.activeKey === threadKey && dragTargetSection === "pinned"
-                          }
-                          sweepAction={actionSweep?.keys.has(threadKey) ? actionSweep.action : null}
-                          snoozeWakeLabelText={
-                            section === "snoozed" && thread.snoozedUntil != null
-                              ? snoozeWakeLabel(
-                                  thread.snoozedUntil,
-                                  { now: new Date().toISOString() },
-                                  messages,
-                                )
-                              : null
-                          }
-                          wokeAt={threadWokeAt(thread, { now: snoozeNow })}
-                          isActive={routeRowThreadKey === threadKey}
-                          revealRef={routeRowThreadKey === threadKey ? revealActiveRow : undefined}
-                          isRouteThread={routeThreadKey === threadKey}
-                          readOpensPullRequestsInRightPanel={readOpensPullRequestsInRightPanel}
-                          jumpLabel={showJumpHints ? (jumpLabelByKey.get(threadKey) ?? null) : null}
-                          environmentLabel={environmentLabelById.get(thread.environmentId) ?? null}
-                          environmentMachine={
-                            environmentMachineById.get(thread.environmentId) ?? "server"
-                          }
-                          project={
-                            projectByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null
-                          }
-                          projectDisplayName={
-                            projectDisplayNameByKey.get(
-                              `${thread.environmentId}:${thread.projectId}`,
-                            ) ?? null
-                          }
-                          providerEntryByInstanceId={
-                            providerEntriesByEnvironment.get(thread.environmentId) ??
-                            EMPTY_PROVIDER_ENTRIES
-                          }
-                          timestampFormat={timestampFormat}
-                          onThreadClick={handleThreadClick}
-                          onThreadActivate={navigateToThread}
-                          onStartRename={startThreadRename}
-                          onRenameTitleChange={setRenamingTitle}
-                          onCommitRename={commitThreadRename}
-                          onCancelRename={cancelThreadRename}
-                          isRenaming={renamingThreadKey === threadKey}
-                          renamingTitle={renamingThreadKey === threadKey ? renamingTitle : ""}
-                          onContextMenu={handleThreadContextMenu}
-                          onSettle={attemptSettle}
-                          onActionSweepStart={startActionSweep}
-                          onUnsettle={attemptUnsettle}
-                          onSnooze={attemptSnooze}
-                          onUnsnooze={attemptUnsnooze}
-                          onPin={attemptPinStable}
-                          onUnpin={attemptUnpin}
-                          onAcknowledgeWoke={acknowledgeWoke}
-                          onFileDropThreads={handleThreadFileDrop}
-                        />
-                      );
-                    };
-                    const from = isContextDrag ? null : (dragState?.activeSection ?? null);
-                    const main: ReactNode[] = [
-                      <SidebarDraftBlock
-                        key="draft-sessions"
-                        draftIds={draftIds}
-                        routeDraftComposer={routeDraftComposer}
-                        terminalLabels={draftTerminalLabels}
-                        jumpLabelByDraftId={draftJumpLabelById}
-                        projectByKey={projectByKey}
-                        projectDisplayNameByKey={projectDisplayNameByKey}
-                        routeDraftId={routeDraftIdForRows}
-                        onNavigateToDraft={navigateToDraft}
-                        onDraftContextMenu={handleDraftContextMenu}
-                      />,
-                    ];
-                    const shelves: Record<
-                      "input" | "working" | "snoozed" | "settled",
-                      ReactNode[]
-                    > = {
+              <SortableContext items={sortableIds} strategy={sidebarSortingStrategy}>
+                {(() => {
+                  const renderThreadRow = (
+                    thread: EnvironmentThreadShell,
+                    section: SidebarSection,
+                    // The tree row of the project folder this row sits in.
+                    folderRow?: string,
+                  ) => {
+                    const threadKey = scopedThreadKey(
+                      scopeThreadRef(thread.environmentId, thread.id),
+                    );
+                    const isCard =
+                      section === "active" ||
+                      section === "pinned" ||
+                      section === "input" ||
+                      section === "working";
+                    const rowVariant = folderRow
+                      ? folderRowsMultiline
+                        ? "folder-multiline"
+                        : "folder"
+                      : isCard
+                        ? "card"
+                        : "slim";
+                    return (
+                      <SortableThreadRow
+                        key={threadKey}
+                        sortableId={threadKey}
+                        contextDrag={isContextDrag}
+                        sortableDisabled={
+                          renamingThreadKey === threadKey ||
+                          !draggableThreadKeys.has(threadKey) ||
+                          optimisticDrop !== null
+                        }
+                        thread={thread}
+                        variant={rowVariant}
+                        navigationParent={
+                          folderRow ??
+                          (section === "input" ||
+                          section === "working" ||
+                          section === "snoozed" ||
+                          section === "settled"
+                            ? `shelf:${section}`
+                            : undefined)
+                        }
+                        variantAction={
+                          section === "snoozed"
+                            ? "unsnooze"
+                            : section === "settled"
+                              ? "unsettle"
+                              : "settle"
+                        }
+                        settlementSupported={serverConfigs.has(thread.environmentId)}
+                        snoozeSupported={serverConfigs.has(thread.environmentId)}
+                        pinningSupported={serverConfigs.has(thread.environmentId)}
+                        isPinned={thread.pinnedAt != null}
+                        dropVerb={
+                          dragState?.activeKey === threadKey
+                            ? resolveSidebarDropVerb(dragState.activeSection, dragTargetSection)
+                            : null
+                        }
+                        dragOverPinned={
+                          dragState?.activeKey === threadKey && dragTargetSection === "pinned"
+                        }
+                        sweepAction={actionSweep?.keys.has(threadKey) ? actionSweep.action : null}
+                        snoozeWakeLabelText={
+                          section === "snoozed" && thread.snoozedUntil != null
+                            ? snoozeWakeLabel(
+                                thread.snoozedUntil,
+                                { now: new Date().toISOString() },
+                                messages,
+                              )
+                            : null
+                        }
+                        wokeAt={threadWokeAt(thread, { now: snoozeNow })}
+                        isActive={routeRowThreadKey === threadKey}
+                        revealRef={routeRowThreadKey === threadKey ? revealActiveRow : undefined}
+                        isRouteThread={routeThreadKey === threadKey}
+                        readOpensPullRequestsInRightPanel={readOpensPullRequestsInRightPanel}
+                        jumpLabel={showJumpHints ? (jumpLabelByKey.get(threadKey) ?? null) : null}
+                        environmentLabel={environmentLabelById.get(thread.environmentId) ?? null}
+                        environmentMachine={
+                          environmentMachineById.get(thread.environmentId) ?? "server"
+                        }
+                        project={
+                          projectByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null
+                        }
+                        projectDisplayName={
+                          projectDisplayNameByKey.get(
+                            `${thread.environmentId}:${thread.projectId}`,
+                          ) ?? null
+                        }
+                        providerEntryByInstanceId={
+                          providerEntriesByEnvironment.get(thread.environmentId) ??
+                          EMPTY_PROVIDER_ENTRIES
+                        }
+                        timestampFormat={timestampFormat}
+                        onThreadClick={handleThreadClick}
+                        onThreadActivate={navigateToThread}
+                        onStartRename={startThreadRename}
+                        onRenameTitleChange={setRenamingTitle}
+                        onCommitRename={commitThreadRename}
+                        onCancelRename={cancelThreadRename}
+                        isRenaming={renamingThreadKey === threadKey}
+                        renamingTitle={renamingThreadKey === threadKey ? renamingTitle : ""}
+                        onContextMenu={handleThreadContextMenu}
+                        onSettle={attemptSettle}
+                        onActionSweepStart={startActionSweep}
+                        onUnsettle={attemptUnsettle}
+                        onSnooze={attemptSnooze}
+                        onUnsnooze={attemptUnsnooze}
+                        onPin={attemptPinStable}
+                        onUnpin={attemptUnpin}
+                        onAcknowledgeWoke={acknowledgeWoke}
+                        onFileDropThreads={handleThreadFileDrop}
+                      />
+                    );
+                  };
+                  const from = isContextDrag ? null : (dragState?.activeSection ?? null);
+                  const main: ReactNode[] = [
+                    <SidebarDraftBlock
+                      key="draft-sessions"
+                      draftIds={draftIds}
+                      routeDraftComposer={routeDraftComposer}
+                      terminalLabels={draftTerminalLabels}
+                      jumpLabelByDraftId={draftJumpLabelById}
+                      projectByKey={projectByKey}
+                      projectDisplayNameByKey={projectDisplayNameByKey}
+                      routeDraftId={routeDraftIdForRows}
+                      onNavigateToDraft={navigateToDraft}
+                      onDraftContextMenu={handleDraftContextMenu}
+                    />,
+                  ];
+                  const shelves: Record<"input" | "working" | "snoozed" | "settled", ReactNode[]> =
+                    {
                       input: [],
                       working: [],
                       snoozed: [],
                       settled: [],
                     };
-                    let items = main;
-                    for (const item of sidebarListItems) {
-                      if (item.kind === "marker") {
-                        if (item.marker === "input-header") items = shelves.input;
-                        else if (item.marker === "working-header") items = shelves.working;
-                        else if (item.marker === "snoozed-header") items = shelves.snoozed;
-                        else if (item.marker === "settled-header") items = shelves.settled;
-                      }
-                      if (item.kind === "thread") {
-                        // Folders draw active rows in their own place below.
-                        if (projectFolders !== null && item.section === "active") continue;
-                        items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
-                        continue;
-                      }
-                      if (projectFolders !== null && item.marker === "active-placeholder") {
-                        for (const folder of projectFolders) {
-                          const folderRow = sidebarFolderRowId(folder.group.projectKey);
-                          const showMore = !folder.collapsed && folder.hiddenThreads.length > 0;
-                          items.push(
-                            <SidebarProjectFolderHeader
-                              key={`project-folder:${folder.group.projectKey}`}
-                              group={folder.group}
-                              collapsed={folder.collapsed}
-                              hiddenThreads={folder.hiddenThreads}
-                              onToggle={toggleProjectFolder}
-                              onNewThread={startThreadInProjectFolder}
-                              onContextMenu={handleProjectFolderContextMenu}
-                            />,
-                          );
-                          for (const thread of folder.threads) {
-                            items.push(renderThreadRow(thread, "active", folderRow));
-                          }
-                          if (showMore || folder.canShowLess) {
-                            items.push(
-                              <li
-                                key={`project-folder-more:${folder.group.projectKey}`}
-                                className="list-none"
-                              >
-                                <button
-                                  type="button"
-                                  data-sidebar-row={`${folderRow}:more`}
-                                  data-sidebar-parent={folderRow}
-                                  onClick={() =>
-                                    toggleProjectFolderShowAll(folder.group.projectKey)
-                                  }
-                                  className={REVEAL_ROW_CLASS_NAME}
-                                >
-                                  <ChevronDownIcon
-                                    aria-hidden
-                                    className={cn("size-4 shrink-0", !showMore && "rotate-180")}
-                                  />
-                                  {showMore
-                                    ? gt(
-                                        "{count, plural, one {Show {count} more} other {Show {count} more}}",
-                                        { count: folder.hiddenThreads.length },
-                                      )
-                                    : gt("Show less")}
-                                </button>
-                              </li>,
-                            );
-                          }
-                        }
-                        continue;
-                      }
-                      switch (item.marker) {
-                        case "pinned-header":
-                          items.push(
-                            <SidebarDragBoundary
-                              key="pinned-header"
-                              marker="pinned-header"
-                              label={gt("Pinned", { $context: "sidebar section" })}
-                              visible={from !== null}
-                              isDropTarget={dragTargetSection === "pinned"}
-                            />,
-                          );
-                          break;
-                        case "pinned-divider":
-                          items.push(
-                            <SidebarDragBoundary
-                              key="pinned-divider"
-                              marker="pinned-divider"
-                              label={gt("Active", { $context: "sidebar section" })}
-                              visible={from !== null}
-                              isDropTarget={dragTargetSection === "active"}
-                            />,
-                          );
-                          break;
-                        case "active-placeholder":
-                          items.push(
-                            <SidebarSectionPlaceholder
-                              key="active-placeholder"
-                              marker="active-placeholder"
-                              label={gt("Active", { $context: "sidebar section" })}
-                              showHint={
-                                from !== null &&
-                                (activeThreads.length === 0 ||
-                                  (from === "active" &&
-                                    activeThreads.length === 1 &&
-                                    dragTargetSection !== null &&
-                                    dragTargetSection !== "active"))
-                              }
-                              isDropTarget={dragTargetSection === "active"}
-                            />,
-                          );
-                          break;
-                        case "input-header":
-                          items.push(
-                            <SidebarSectionHeader
-                              key="input-shelf-header"
-                              marker="input-header"
-                              label={gt("Input", { $context: "sidebar section" })}
-                              count={inputThreads.length}
-                              toggle={{ expanded: inputShelfExpanded, onToggle: toggleInputShelf }}
-                            />,
-                          );
-                          break;
-                        case "working-header":
-                          items.push(
-                            <SidebarSectionHeader
-                              key="working-shelf-header"
-                              marker="working-header"
-                              label={gt("Working", { $context: "sidebar section" })}
-                              count={workingThreads.length}
-                              toggle={{
-                                expanded: workingShelfExpanded,
-                                onToggle: toggleWorkingShelf,
-                              }}
-                            />,
-                          );
-                          break;
-                        case "snoozed-header":
-                          items.push(
-                            <SidebarSectionHeader
-                              key="snoozed-shelf-header"
-                              marker="snoozed-header"
-                              label={gt("Snoozed", { $context: "sidebar section" })}
-                              count={snoozedThreads.length}
-                              toggle={{
-                                expanded: snoozedShelfExpanded,
-                                onToggle: toggleSnoozedShelf,
-                              }}
-                            />,
-                          );
-                          break;
-                        case "settled-header":
-                          items.push(
-                            <SidebarSectionHeader
-                              key="settled-shelf-header"
-                              marker="settled-header"
-                              label={gt("Settled", { $context: "sidebar section" })}
-                              count={settledCount}
-                              dragging={from !== null}
-                              isDropTarget={dragTargetSection === "settled"}
-                              toggle={{
-                                expanded: settledShelfExpanded,
-                                onToggle: toggleSettledShelf,
-                              }}
-                            />,
-                          );
-                          break;
-                        case "settled-placeholder":
-                          items.push(
-                            <SidebarSectionPlaceholder
-                              key="settled-placeholder"
-                              marker="settled-placeholder"
-                              label={gt("Settled", { $context: "sidebar section" })}
-                              showHint={
-                                from !== null &&
-                                (renderedSettledThreads.length === 0 ||
-                                  (from === "settled" &&
-                                    renderedSettledThreads.length === 1 &&
-                                    dragTargetSection !== null &&
-                                    dragTargetSection !== "settled"))
-                              }
-                              isDropTarget={dragTargetSection === "settled"}
-                            />,
-                          );
-                          break;
-                      }
+                  let items = main;
+                  for (const item of sidebarListItems) {
+                    if (item.kind === "marker") {
+                      if (item.marker === "input-header") items = shelves.input;
+                      else if (item.marker === "working-header") items = shelves.working;
+                      else if (item.marker === "snoozed-header") items = shelves.snoozed;
+                      else if (item.marker === "settled-header") items = shelves.settled;
                     }
-                    return (
-                      <SidebarThreadSections
-                        key={settledShelfFixed ? "fixed-settled" : "scroll-settled"}
-                        ref={attachTreeRef}
-                        settledFixed={settledShelfFixed}
-                        main={main}
-                        shelves={shelves}
-                        sweeping={actionSweep !== null}
-                        dragging={dragState !== null}
-                        settledMore={
-                          settledShelfExpanded && hiddenSettledCount > 0 ? (
-                            <li className="list-none">
+                    if (item.kind === "thread") {
+                      // Folders draw active rows in their own place below.
+                      if (projectFolders !== null && item.section === "active") continue;
+                      items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
+                      continue;
+                    }
+                    if (projectFolders !== null && item.marker === "active-placeholder") {
+                      for (const folder of projectFolders) {
+                        const folderRow = sidebarFolderRowId(folder.group.projectKey);
+                        const showMore = !folder.collapsed && folder.hiddenThreads.length > 0;
+                        items.push(
+                          <SidebarProjectFolderHeader
+                            key={`project-folder:${folder.group.projectKey}`}
+                            group={folder.group}
+                            collapsed={folder.collapsed}
+                            hiddenThreads={folder.hiddenThreads}
+                            onToggle={toggleProjectFolder}
+                            onNewThread={startThreadInProjectFolder}
+                            onContextMenu={handleProjectFolderContextMenu}
+                          />,
+                        );
+                        for (const thread of folder.threads) {
+                          items.push(renderThreadRow(thread, "active", folderRow));
+                        }
+                        if (showMore || folder.canShowLess) {
+                          items.push(
+                            <li
+                              key={`project-folder-more:${folder.group.projectKey}`}
+                              className="list-none"
+                            >
                               <button
                                 type="button"
-                                data-sidebar-row="settled:more"
-                                data-sidebar-parent="shelf:settled"
-                                aria-disabled={olderSettledShelf.loading}
-                                onClick={() => {
-                                  if (olderSettledShelf.loading) return;
-                                  olderSettledShelf.retry();
-                                  showMoreSettled();
-                                }}
+                                data-sidebar-row={`${folderRow}:more`}
+                                data-sidebar-parent={folderRow}
+                                onClick={() => toggleProjectFolderShowAll(folder.group.projectKey)}
                                 className={REVEAL_ROW_CLASS_NAME}
                               >
-                                {/* Plus means "add", so revealing more uses a chevron. */}
-                                <ChevronDownIcon aria-hidden className="size-4 shrink-0" />
-                                {olderSettledShelf.loading
-                                  ? gt("Loading")
-                                  : olderSettledShelf.failed
-                                    ? gt("Could not load older threads. Retry")
-                                    : gt(
-                                        "{count, plural, one {Show {count} more} other {Show {count} more}}",
-                                        {
-                                          count: Math.min(
-                                            hiddenSettledCount,
-                                            SETTLED_TAIL_PAGE_COUNT,
-                                          ),
-                                        },
-                                      )}
+                                <ChevronDownIcon
+                                  aria-hidden
+                                  className={cn("size-4 shrink-0", !showMore && "rotate-180")}
+                                />
+                                {showMore
+                                  ? gt(
+                                      "{count, plural, one {Show {count} more} other {Show {count} more}}",
+                                      { count: folder.hiddenThreads.length },
+                                    )
+                                  : gt("Show less")}
                               </button>
-                            </li>
-                          ) : null
+                            </li>,
+                          );
                         }
-                      />
-                    );
-                  })()}
-                </SortableContext>
-                {createPortal(
-                  <DragOverlay dropAnimation={null}>
-                    {draggedThreadKey && !isContextDrag ? (
-                      <div className="rounded-md bg-sidebar p-3 text-sm text-sidebar-foreground shadow-lg ring-1 ring-sidebar-border">
-                        <span>{threadByKey.get(draggedThreadKey)?.title}</span>
-                        {dragTargetSection === "pinned" ||
-                        dragTargetSection === "active" ||
-                        dragTargetSection === "settled" ? (
-                          <span className="ml-2 text-xs text-sidebar-muted-foreground">
-                            {dragTargetSection === "pinned"
-                              ? gt("Pinned", { $context: "sidebar section" })
-                              : dragTargetSection === "active"
-                                ? gt("Active", { $context: "sidebar section" })
-                                : gt("Settled", { $context: "sidebar section" })}
-                          </span>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </DragOverlay>,
-                  document.body,
-                )}
-              </DndContext>
+                      }
+                      continue;
+                    }
+                    switch (item.marker) {
+                      case "pinned-header":
+                        items.push(
+                          <SidebarDragBoundary
+                            key="pinned-header"
+                            marker="pinned-header"
+                            label={gt("Pinned", { $context: "sidebar section" })}
+                            visible={from !== null}
+                            isDropTarget={dragTargetSection === "pinned"}
+                          />,
+                        );
+                        break;
+                      case "pinned-divider":
+                        items.push(
+                          <SidebarDragBoundary
+                            key="pinned-divider"
+                            marker="pinned-divider"
+                            label={gt("Active", { $context: "sidebar section" })}
+                            visible={from !== null}
+                            isDropTarget={dragTargetSection === "active"}
+                          />,
+                        );
+                        break;
+                      case "active-placeholder":
+                        items.push(
+                          <SidebarSectionPlaceholder
+                            key="active-placeholder"
+                            marker="active-placeholder"
+                            label={gt("Active", { $context: "sidebar section" })}
+                            showHint={
+                              from !== null &&
+                              (activeThreads.length === 0 ||
+                                (from === "active" &&
+                                  activeThreads.length === 1 &&
+                                  dragTargetSection !== null &&
+                                  dragTargetSection !== "active"))
+                            }
+                            isDropTarget={dragTargetSection === "active"}
+                          />,
+                        );
+                        break;
+                      case "input-header":
+                        items.push(
+                          <SidebarSectionHeader
+                            key="input-shelf-header"
+                            marker="input-header"
+                            label={gt("Input", { $context: "sidebar section" })}
+                            count={inputThreads.length}
+                            toggle={{ expanded: inputShelfExpanded, onToggle: toggleInputShelf }}
+                          />,
+                        );
+                        break;
+                      case "working-header":
+                        items.push(
+                          <SidebarSectionHeader
+                            key="working-shelf-header"
+                            marker="working-header"
+                            label={gt("Working", { $context: "sidebar section" })}
+                            count={workingThreads.length}
+                            toggle={{
+                              expanded: workingShelfExpanded,
+                              onToggle: toggleWorkingShelf,
+                            }}
+                          />,
+                        );
+                        break;
+                      case "snoozed-header":
+                        items.push(
+                          <SidebarSectionHeader
+                            key="snoozed-shelf-header"
+                            marker="snoozed-header"
+                            label={gt("Snoozed", { $context: "sidebar section" })}
+                            count={snoozedThreads.length}
+                            toggle={{
+                              expanded: snoozedShelfExpanded,
+                              onToggle: toggleSnoozedShelf,
+                            }}
+                          />,
+                        );
+                        break;
+                      case "settled-header":
+                        items.push(
+                          <SidebarSectionHeader
+                            key="settled-shelf-header"
+                            marker="settled-header"
+                            label={gt("Settled", { $context: "sidebar section" })}
+                            count={settledCount}
+                            dragging={from !== null}
+                            isDropTarget={dragTargetSection === "settled"}
+                            toggle={{
+                              expanded: settledShelfExpanded,
+                              onToggle: toggleSettledShelf,
+                            }}
+                          />,
+                        );
+                        break;
+                      case "settled-placeholder":
+                        items.push(
+                          <SidebarSectionPlaceholder
+                            key="settled-placeholder"
+                            marker="settled-placeholder"
+                            label={gt("Settled", { $context: "sidebar section" })}
+                            showHint={
+                              from !== null &&
+                              (renderedSettledThreads.length === 0 ||
+                                (from === "settled" &&
+                                  renderedSettledThreads.length === 1 &&
+                                  dragTargetSection !== null &&
+                                  dragTargetSection !== "settled"))
+                            }
+                            isDropTarget={dragTargetSection === "settled"}
+                          />,
+                        );
+                        break;
+                    }
+                  }
+                  return (
+                    <SidebarThreadSections
+                      key={settledShelfFixed ? "fixed-settled" : "scroll-settled"}
+                      ref={attachTreeRef}
+                      settledFixed={settledShelfFixed}
+                      main={main}
+                      shelves={shelves}
+                      sweeping={actionSweep !== null}
+                      dragging={dragState !== null}
+                      settledMore={
+                        settledShelfExpanded && hiddenSettledCount > 0 ? (
+                          <li className="list-none">
+                            <button
+                              type="button"
+                              data-sidebar-row="settled:more"
+                              data-sidebar-parent="shelf:settled"
+                              aria-disabled={olderSettledShelf.loading}
+                              onClick={() => {
+                                if (olderSettledShelf.loading) return;
+                                olderSettledShelf.retry();
+                                showMoreSettled();
+                              }}
+                              className={REVEAL_ROW_CLASS_NAME}
+                            >
+                              {/* Plus means "add", so revealing more uses a chevron. */}
+                              <ChevronDownIcon aria-hidden className="size-4 shrink-0" />
+                              {olderSettledShelf.loading
+                                ? gt("Loading")
+                                : olderSettledShelf.failed
+                                  ? gt("Could not load older threads. Retry")
+                                  : gt(
+                                      "{count, plural, one {Show {count} more} other {Show {count} more}}",
+                                      {
+                                        count: Math.min(
+                                          hiddenSettledCount,
+                                          SETTLED_TAIL_PAGE_COUNT,
+                                        ),
+                                      },
+                                    )}
+                            </button>
+                          </li>
+                        ) : null
+                      }
+                    />
+                  );
+                })()}
+              </SortableContext>
+              {createPortal(
+                <DragOverlay dropAnimation={null}>
+                  {draggedThreadKey && !isContextDrag ? (
+                    <div className="rounded-md bg-sidebar p-3 text-sm text-sidebar-foreground shadow-lg ring-1 ring-sidebar-border">
+                      <span>{threadByKey.get(draggedThreadKey)?.title}</span>
+                      {dragTargetSection === "pinned" ||
+                      dragTargetSection === "active" ||
+                      dragTargetSection === "settled" ? (
+                        <span className="ml-2 text-xs text-sidebar-muted-foreground">
+                          {dragTargetSection === "pinned"
+                            ? gt("Pinned", { $context: "sidebar section" })
+                            : dragTargetSection === "active"
+                              ? gt("Active", { $context: "sidebar section" })
+                              : gt("Settled", { $context: "sidebar section" })}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </DragOverlay>,
+                document.body,
+              )}
+            </DndContext>
           ) : null}
         </SidebarGroup>
       </SidebarContent>
