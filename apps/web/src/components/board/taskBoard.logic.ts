@@ -46,10 +46,15 @@ export type BoardThread = Pick<
   | "blockedOnThreadWait"
   | "latestRun"
   | "lastVisitedAt"
+  | "connectionPhase"
 > &
   ThreadSnoozeShell;
 
 const PANEL_BY_STATUS: Record<SidebarThreadStatus, BoardPanelId> = {
+  // Connection states only replace an active run's status, so the thread is still working.
+  connecting: "working",
+  reconnecting: "working",
+  offline: "working",
   approval: "attention",
   input: "attention",
   request: "attention",
