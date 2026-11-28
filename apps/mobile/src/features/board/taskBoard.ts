@@ -24,6 +24,10 @@ function panelForThread(thread: EnvironmentThreadShell, now: string): TaskBoardP
     case "input":
     case "request":
       return "attention";
+    // Connection states only replace an active run's status, so the thread is still working.
+    case "connecting":
+    case "reconnecting":
+    case "offline":
     case "working":
       return "working";
     case "waiting":
